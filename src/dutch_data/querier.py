@@ -12,6 +12,10 @@ from openai.types.chat.chat_completion_message_param import ChatCompletionMessag
 
 @dataclass
 class AzureQuerier:
+    """
+    Class for querying the Azure OpenAI API.
+    """
+
     api_key: str
     api_version: str
     deployment_name: str
