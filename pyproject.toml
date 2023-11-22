@@ -30,11 +30,12 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
-    "openai",
-    "pandas",
     "datasets",
     "huggingface-hub",
-    "tiktoken"
+    "openai",
+    "pandas",
+    "tiktoken",
+    "tqdm",
 ]
 
 [project.urls]
