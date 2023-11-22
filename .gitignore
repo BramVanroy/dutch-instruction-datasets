@@ -2,7 +2,6 @@ run-backend.ps
 .eslintrc.js
 .venv
 .credentials.json
-data
 
 # ignore compiled styles
 *.css
