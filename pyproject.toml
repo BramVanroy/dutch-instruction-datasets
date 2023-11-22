@@ -36,6 +36,7 @@ dependencies = [
     "pandas",
     "tiktoken",
     "tqdm",
+    "typer[all]",
 ]
 
 [project.urls]
@@ -45,6 +46,9 @@ repository = "https://github.com/BramVanroy/dutch-instruction-datasets.git"
 
 [project.optional-dependencies]
 dev = ["flake8", "black", "isort", "numpy", "mypy", "pytest"]
+
+[project.scripts]
+generate-subtopics = "dutch_data.scripts.generate_subtopics:app"
 
 # TOOLS
 [tool.setuptools]
