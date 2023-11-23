@@ -22,7 +22,7 @@ generate-subtopics .credentials.json gpt-35-turbo --num-topics 5 --output-file d
 ## TODO
 
 - [ ] Make scripts more generic so that also other concepts can be used
-- [ ] Manually verify generated data. Currently have to start at "gezondheid en welzijn"
+- [ ] Manually verify generated data. Currently have to start at "eten en drinken"
 
 ## License
 
