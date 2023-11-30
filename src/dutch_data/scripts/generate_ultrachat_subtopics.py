@@ -5,7 +5,7 @@ from typing import Annotated, Optional
 
 import typer
 from dutch_data import AzureQuerier, Credentials
-from dutch_data.conceptual_fields import WORLD_CONCEPTS
+from dutch_data.ultrachat.conceptual_fields import WORLD_CONCEPTS
 from tqdm import tqdm
 from typer import Argument, Option
 
@@ -41,9 +41,7 @@ def generate_subtopics(
         str, Argument(help="which credential profile (key) to use from the credentials file")
     ],
     *,
-    output_file: Annotated[
-        Optional[str], Option(help="which credential profile (key) to use from the credentials file")
-    ] = None,
+    output_file: Annotated[Optional[str], Option(help="output JSON file to write results to")] = None,
     num_topics: Annotated[int, Option(help="how many subtopics to generate for each world concept")] = 30,
     max_num_workers: Annotated[int, Option(help="how many parallel workers to use to query the API")] = 6,
 ) -> dict[str, list[str]]:
