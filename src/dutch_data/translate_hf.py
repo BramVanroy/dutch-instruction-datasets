@@ -1,6 +1,7 @@
 import json
 from os import PathLike
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
@@ -51,6 +52,7 @@ def translate_hf_dataset(
     hub_name: str | None = None,
     system_prompt_template: str | None = SYSTEM_TRANSLATION_PROMPT,
     merge_with_original: bool = True,
+    **kwargs,
 ) -> DatasetDict | None:
     """
     Translates a HuggingFace dataset using the Azure OpenAI API.
@@ -70,6 +72,7 @@ def translate_hf_dataset(
     :param system_prompt_template: prompt template. Can optionally have "{src_lang}" and "{tgt_lang}" fields that will
     be replaced with the given source and target languages
     :param merge_with_original: whether to merge the translated dataset with the original dataset
+    :param kwargs: any keyword arguments to pass to the OpenAI API (such as max tokens, frequency penalty, etc.)
     :return:
     """
     # Load Azure Querier
@@ -86,8 +89,9 @@ def translate_hf_dataset(
     pdout = Path(dout).resolve()
     pdout.mkdir(parents=True, exist_ok=True)
     already_done_df = None
-    if pdout.joinpath("tmp_openai_translations.tsv").exists():
-        already_done_df = pd.read_csv(pdout.joinpath("tmp_openai_translations.tsv"), sep="\t", encoding="utf-8")
+    pf_tmp = pdout.joinpath("tmp_openai_translations.tsv")
+    if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
+        already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8")
         already_done_df = already_done_df.astype({"idx": int})
 
     # Load dataset
@@ -100,9 +104,8 @@ def translate_hf_dataset(
     # Translate
     translations = already_done_df.to_dict(orient="records") if already_done_df is not None else []
 
-    with pdout.joinpath("tmp_openai_translations.tsv").open("a", encoding="utf-8") as fhout:
+    with pf_tmp.open("a", encoding="utf-8") as fhout:
         for split_name, split_dataset in orig_dataset.items():
-            split_dataset = split_dataset.select(range(50))
             for column_name in split_dataset.column_names:
                 ds_column = split_dataset[column_name]
                 lang_colname = f"{column_name}_{tgt_lang.lower()}"
@@ -118,28 +121,40 @@ def translate_hf_dataset(
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                     )
 
+                # Build messages. Take into account that the system prompt template is optional
                 messages = [
-                    [
-                        {"role": "system", "content": build_system_prompt(src_lang, tgt_lang, system_prompt_template)},
-                        {"role": "user", "content": text.strip()},
-                    ]
+                    (
+                        text_idx,
+                        (
+                            [
+                                {
+                                    "role": "system",
+                                    "content": build_system_prompt(src_lang, tgt_lang, system_prompt_template),
+                                },
+                                {"role": "user", "content": text.strip()},
+                            ]
+                            if system_prompt_template
+                            else [{"role": "user", "content": text.strip()}]
+                        ),
+                    )
                     for text_idx, text in enumerate(ds_column)
                     if text_idx not in done_subset_idxs and text.strip()
                 ]
 
+                if not messages:
+                    continue
+
                 print(f"Number of messages to translate: {len(messages)}")
 
-                for translation_idx, translation in tqdm(
-                    enumerate(
-                        querier.query_list_of_messages(messages, return_in_order=True), start=len(done_subset_idxs)
-                    ),
+                for job_idx, translation in tqdm(
+                    querier.query_list_of_messages(messages, return_in_order=False, **kwargs),
                     total=len(messages),
                     desc=f"Translating {split_name} - {column_name}",
                 ):
                     chunk = {
                         "split": split_name,
                         "column": lang_colname,
-                        "idx": translation_idx,
+                        "idx": job_idx,
                         f"translation_{tgt_lang.lower()}": translation.strip(),
                     }
                     translations.append(chunk)
@@ -150,19 +165,25 @@ def translate_hf_dataset(
                     fhout.flush()
 
     if translations:
-        df = pd.DataFrame(translations).fillna("")
+        df = pd.DataFrame(translations)
         output_datasets = {}
         for split_name, split_group in df.groupby("split"):
             split_group = split_group.drop(columns=["split"])
-            split_group = split_group.pivot(index="idx", columns="column", values=f"translation_{tgt_lang.lower()}")
+            # Pivot so that we get the expected output format
+            # Also sort by the index (rows sorted like the original dataset) and then by column name
+            split_group = (
+                split_group.pivot(index="idx", columns="column", values=f"translation_{tgt_lang.lower()}")
+                .sort_index()
+                .sort_index(axis=1)
+                .fillna("")
+            )
+            print(split_group.head(3))
             split_ds = Dataset.from_pandas(split_group, preserve_index=False)
 
             if merge_with_original:
-                output_datasets[split_name] = concatenate_datasets(
-                    [orig_dataset[split_name].select(range(50)), split_ds], axis=1
-                )
-            else:
-                output_datasets[split_name] = split_ds
+                split_ds = concatenate_datasets([orig_dataset[split_name], split_ds], axis=1)
+            split_ds = split_ds.select_columns(sorted(split_ds.column_names))
+            output_datasets[split_name] = split_ds
 
         output_datasets = DatasetDict(output_datasets)
         output_datasets.save_to_disk(pdout)
