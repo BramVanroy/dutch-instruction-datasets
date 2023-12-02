@@ -88,11 +88,16 @@ def translate_hf_dataset(
     # Load potential pre-existing data
     pdout = Path(dout).resolve()
     pdout.mkdir(parents=True, exist_ok=True)
+
     already_done_df = None
     pf_tmp = pdout.joinpath("tmp_openai_translations.tsv")
     if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
-        already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8")
-        already_done_df = already_done_df.astype({"idx": int})
+        already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8", dtype={"idx": int})
+
+    failed_df = None
+    pf_tmp_failed = pdout.joinpath("tmp_openai_failed.tsv")
+    if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
+        failed_df = pd.read_csv(pf_tmp_failed, sep="\t", encoding="utf-8", dtype={"idx": int})
 
     # Load dataset
     orig_dataset: DatasetDict = load_dataset(dataset_name, name=config_name)
@@ -104,7 +109,7 @@ def translate_hf_dataset(
     # Translate
     translations = already_done_df.to_dict(orient="records") if already_done_df is not None else []
 
-    with pf_tmp.open("a", encoding="utf-8") as fhout:
+    with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
         for split_name, split_dataset in orig_dataset.items():
             for column_name in split_dataset.column_names:
                 ds_column = split_dataset[column_name]
@@ -120,6 +125,15 @@ def translate_hf_dataset(
                     print(
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                     )
+
+                if failed_df is not None:
+                    failed_subset_idxs = set(
+                        failed_df[(failed_df["split"] == split_name) & (failed_df["column"] == lang_colname)][
+                            "idx"
+                        ].unique()
+                    )
+                    print(f"Skipping {len(failed_subset_idxs)} failed examples in {split_name} - {column_name}")
+                    done_subset_idxs = done_subset_idxs.union(failed_subset_idxs)
 
                 # Build messages. Take into account that the system prompt template is optional
                 messages = [
@@ -146,23 +160,32 @@ def translate_hf_dataset(
 
                 print(f"Number of messages to translate: {len(messages)}")
 
-                for job_idx, translation in tqdm(
+                for translation_result in tqdm(
                     querier.query_list_of_messages(messages, return_in_order=False, **kwargs),
                     total=len(messages),
                     desc=f"Translating {split_name} - {column_name}",
                 ):
+                    translation = translation_result.result
                     chunk = {
                         "split": split_name,
                         "column": lang_colname,
-                        "idx": job_idx,
-                        f"translation_{tgt_lang.lower()}": translation.strip(),
+                        "idx": translation_result.job_idx,
                     }
-                    translations.append(chunk)
-                    # Using pd for easy encoding and potential troubles with newlines and such
-                    chunk_df = pd.DataFrame([chunk])
-                    # Only write output header if we're at the top of the file
-                    chunk_df.to_csv(fhout, index=False, header=fhout.tell() == 0, sep="\t", encoding="utf-8")
-                    fhout.flush()
+
+                    if translation:
+                        chunk[f"translation_{tgt_lang.lower()}"] = translation.strip()
+                        translations.append(chunk)
+                        # Using pd for easy encoding and potential troubles with newlines and such
+                        chunk_df = pd.DataFrame([chunk])
+                        # Only write output header if we're at the top of the file
+                        chunk_df.to_csv(fhout, index=False, header=fhout.tell() == 0, sep="\t", encoding="utf-8")
+                        fhout.flush()
+                    else:
+                        chunk_df_failed = pd.DataFrame([chunk])
+                        chunk["error"] = str(translation_result.error)
+                        chunk_df_failed.to_csv(
+                            fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
+                        )
 
     if translations:
         df = pd.DataFrame(translations)

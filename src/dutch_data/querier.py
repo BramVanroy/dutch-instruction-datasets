@@ -6,17 +6,24 @@ from typing import Any, Generator
 
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
-from openai import AzureOpenAI, OpenAIError, RateLimitError
+from openai import AzureOpenAI, BadRequestError, OpenAIError
 from openai._streaming import Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 
 
-# A tuple with two tuples, one with content one with role, e.g.
-# (("content", "msg job 1"), ("role", "user"))
-MESSAGE_T = tuple[tuple[str, str], tuple[str, str]]
-# conversation ID and a tuple of messages
-CONVERSATION_T = tuple[int, tuple[MESSAGE_T, ...]]
+@dataclass
+class Result:
+    """
+    Class for storing the results of a query.
+    """
+
+    job_idx: int
+    result: str | ChatCompletion | None = None
+    error: Exception | None = None
+
+    def __hash__(self):
+        return hash((self.job_idx, str(self.result)))
 
 
 @dataclass
@@ -70,7 +77,7 @@ class AzureQuerier:
     @lru_cache(maxsize=1024)
     def _query_messages(
         self, messages: tuple[int, tuple[tuple[str, str], ...]], return_full_api_output: bool = False, **kwargs
-    ) -> tuple[int, str | ChatCompletion | Stream[ChatCompletionChunk]]:
+    ) -> Result:
         """
         Query the Azure OpenAI API.
         :param messages: tuple of messages where the first item is the index of the job, and the second item is a
@@ -90,6 +97,11 @@ class AzureQuerier:
                     model=self.deployment_name, messages=messages, **kwargs
                 )
             except Exception as exc:
+                # Bad requests, like malformed requests or those with filtered hate speech, sexual content, etc.
+                # will throw this exception. No use to retry these.
+                if isinstance(exc, BadRequestError):
+                    return Result(job_idx, None, exc)
+
                 max_retries = self.update_patience(max_retries, exc, messages=messages)
                 continue
             else:
@@ -106,13 +118,13 @@ class AzureQuerier:
                         for idx in range(1, len(completion.choices)):
                             completion_str = completion.choices[idx].message.content
                             if completion_str:
-                                return job_idx, completion_str
+                                return Result(job_idx, completion_str)
 
                         # Still did not find the response, so retry
                         max_retries = self.update_patience(max_retries, messages=messages)
                         continue
-                    return job_idx, completion_str
-                return job_idx, completion
+                    return Result(job_idx, completion_str)
+                return Result(job_idx, completion)
 
     def query_list_of_messages(
         self,
@@ -120,7 +132,7 @@ class AzureQuerier:
         return_full_api_output: bool = False,
         return_in_order: bool = True,
         **kwargs,
-    ) -> Generator[tuple[int, str | ChatCompletion | Stream[ChatCompletionChunk]], None, None]:
+    ) -> Generator[Result, None, None]:
         """
         Query the Azure OpenAI API with a list of messages.
         :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
