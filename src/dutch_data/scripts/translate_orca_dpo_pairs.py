@@ -4,6 +4,7 @@ import typer
 from dutch_data.translate_hf import SYSTEM_TRANSLATION_PROMPT, translate_hf_dataset
 from typer import Argument, Option
 
+
 # NOTE: this prompt has around 1250 tokens so it will be quite expensive to run. It is relatively robust, however.
 _TRANSLATION_PROMPT = """Je bent een vertaler die Engels naar Nederlands vertaalt in hoge kwaliteit. Je vermijdt letterlijke vertalingen. Je zorgt voor een vloeiende en leesbare tekst. Je vermijdt bias, zoals gender bias en regionale bias. Je gebruikt informeel Standaardnederlands. Je doet ook aan lokalisatie, waar je je vertaling waar nodig aanpast aan de Nederlandse taal en de cultuur binnen het Nederlandstalige taalgebied (Nederland, Vlaanderen, en daarbuiten).
 

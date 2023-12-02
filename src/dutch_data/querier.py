@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from time import sleep
-from typing import Generator, Any
+from typing import Any, Generator
 
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
@@ -49,7 +49,7 @@ class AzureQuerier:
     def __hash__(self):
         return hash((self.api_key, self.api_version, self.deployment_name, self.endpoint))
 
-    def update_patience(self, max_retries: int, exception: Exception|None = None, messages: Any = None):
+    def update_patience(self, max_retries: int, exception: Exception | None = None, messages: Any = None):
         if exception is None and messages is None:
             raise ValueError("If an exception is not passed, messages must be passed")
 
@@ -68,7 +68,7 @@ class AzureQuerier:
         return max_retries
 
     @lru_cache(maxsize=1024)
-    def query_messages(
+    def _query_messages(
         self, messages: tuple[int, tuple[tuple[str, str], ...]], return_full_api_output: bool = False, **kwargs
     ) -> tuple[int, str | ChatCompletion | Stream[ChatCompletionChunk]]:
         """
@@ -149,16 +149,16 @@ class AzureQuerier:
 
         if self.max_workers < 2:
             for messages in list_of_messages:
-                yield self.query_messages(messages, return_full_api_output, **kwargs)
+                yield self._query_messages(messages, return_full_api_output, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
-                    executor.submit(self.query_messages, idx_and_messages, return_full_api_output, **kwargs)
+                    executor.submit(self._query_messages, idx_and_messages, return_full_api_output, **kwargs)
                     for idx_and_messages in list_of_messages
                 ]
 
                 yielder = futures if return_in_order else as_completed(futures)
-                for msgs, future in zip(list_of_messages, yielder):
+                for future in yielder:
                     # Should trigger an exception here if the future failed inside self.query_messages
                     yield future.result()
 
