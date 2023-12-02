@@ -56,7 +56,7 @@ class AzureQuerier:
         max_retries -= 1
         if max_retries == 0:
             if exception is not None:
-                raise exception
+                raise OpenAIError(f"An error occurred (see above) for these messages:\n{messages}") from exception
             else:
                 raise OpenAIError(
                     f"OpenAI API unexpectedly returned empty completion multiple times for these messages:"
@@ -90,7 +90,7 @@ class AzureQuerier:
                     model=self.deployment_name, messages=messages, **kwargs
                 )
             except Exception as exc:
-                max_retries = self.update_patience(max_retries, exc)
+                max_retries = self.update_patience(max_retries, exc, messages=messages)
                 continue
             else:
                 if not completion:
