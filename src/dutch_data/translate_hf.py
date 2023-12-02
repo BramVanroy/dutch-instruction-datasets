@@ -1,11 +1,11 @@
 import json
 from os import PathLike
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from dutch_data import AzureQuerier, Credentials
+from openai import BadRequestError
 from tqdm import tqdm
 
 
@@ -165,27 +165,33 @@ def translate_hf_dataset(
                     total=len(messages),
                     desc=f"Translating {split_name} - {column_name}",
                 ):
-                    translation = translation_result.result
                     chunk = {
                         "split": split_name,
                         "column": lang_colname,
                         "idx": translation_result.job_idx,
                     }
 
-                    if translation:
-                        chunk[f"translation_{tgt_lang.lower()}"] = translation.strip()
+                    if translation_result.error is not None:
+                        # For BadRequests, caused by offensive, sexual, inappropriate content, will never work
+                        # so we write them to a separate file and ignore them forever
+                        if isinstance(translation_result.error, BadRequestError):
+                            chunk_df_failed = pd.DataFrame([chunk])
+                            chunk["error"] = str(translation_result.error)
+                            chunk_df_failed.to_csv(
+                                fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
+                            )
+                            fhout_failed.flush()
+                        else:
+                            # Unexpected error after retries, so we stop everything and raise error in main thread
+                            raise translation_result.error
+                    else:
+                        chunk[f"translation_{tgt_lang.lower()}"] = translation_result.result.strip()
                         translations.append(chunk)
                         # Using pd for easy encoding and potential troubles with newlines and such
                         chunk_df = pd.DataFrame([chunk])
                         # Only write output header if we're at the top of the file
                         chunk_df.to_csv(fhout, index=False, header=fhout.tell() == 0, sep="\t", encoding="utf-8")
                         fhout.flush()
-                    else:
-                        chunk_df_failed = pd.DataFrame([chunk])
-                        chunk["error"] = str(translation_result.error)
-                        chunk_df_failed.to_csv(
-                            fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
-                        )
 
     if translations:
         df = pd.DataFrame(translations)

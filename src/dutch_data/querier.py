@@ -7,8 +7,7 @@ from typing import Any, Generator
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
 from openai import AzureOpenAI, BadRequestError, OpenAIError
-from openai._streaming import Stream
-from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 
 
@@ -19,6 +18,7 @@ class Result:
     """
 
     job_idx: int
+    messages: list[dict[str, str]]
     result: str | ChatCompletion | None = None
     error: Exception | None = None
 
@@ -102,13 +102,19 @@ class AzureQuerier:
                 # Bad requests, like malformed requests or those with filtered hate speech, sexual content, etc.
                 # will throw this exception. No use to retry these.
                 if isinstance(exc, BadRequestError):
-                    return Result(job_idx, None, exc)
+                    return Result(job_idx, messages, None, exc)
 
-                max_retries = self.update_patience(max_retries, exc, messages=messages)
+                try:
+                    max_retries = self.update_patience(max_retries, exc, messages=messages)
+                except Exception as exc:
+                    return Result(job_idx, messages, None, exc)
                 continue
             else:
                 if not completion:
-                    max_retries = self.update_patience(max_retries, messages=messages)
+                    try:
+                        max_retries = self.update_patience(max_retries, messages=messages)
+                    except Exception as exc:
+                        return Result(job_idx, messages, None, exc)
                     continue
 
                 if not return_full_api_output:
@@ -120,13 +126,16 @@ class AzureQuerier:
                         for idx in range(1, len(completion.choices)):
                             completion_str = completion.choices[idx].message.content
                             if completion_str:
-                                return Result(job_idx, completion_str)
+                                return Result(job_idx, messages, completion_str)
 
                         # Still did not find the response, so retry
-                        max_retries = self.update_patience(max_retries, messages=messages)
+                        try:
+                            max_retries = self.update_patience(max_retries, messages=messages)
+                        except Exception as exc:
+                            return Result(job_idx, messages, None, exc)
                         continue
-                    return Result(job_idx, completion_str)
-                return Result(job_idx, completion)
+                    return Result(job_idx, messages, completion_str)
+                return Result(job_idx, messages, completion)
 
     def query_list_of_messages(
         self,
