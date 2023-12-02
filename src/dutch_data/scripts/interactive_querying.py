@@ -53,7 +53,7 @@ def interactive_playground(
         user_message = build_message("user", user_query)
         messages.append(user_message)
 
-        response = next(querier.query_list_of_messages([messages]))[1]
+        response = next(querier.query_list_of_messages([messages])).result
         print(f"{Back.MAGENTA}{Fore.WHITE}Assistant:{Style.RESET_ALL} ", response)
         print()
 

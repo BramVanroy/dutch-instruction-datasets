@@ -64,7 +64,8 @@ def generate_subtopics(
         zip(WORLD_CONCEPTS, querier.query_list_of_messages(list_of_messages=list_of_messages, return_in_order=True)),
         total=len(WORLD_CONCEPTS),
     ):
-        topics = sorted([re.sub(r"^\W*(.*?)\W*$", r"\1", topic).strip() for topic in response.lower().split(",")])
+        result = response.result
+        topics = sorted([re.sub(r"^\W*(.*?)\W*$", r"\1", topic).strip() for topic in result.lower().split(",")])
         data[concept] = topics
         if output_file is None:
             print(concept.upper())
