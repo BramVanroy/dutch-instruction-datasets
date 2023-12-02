@@ -98,4 +98,5 @@ def translate_orcadpo_system_question(
         max_num_workers=max_num_workers,
         system_prompt_template=sys_msg,
         max_tokens=max_tokens,
+        timeout=360,
     )

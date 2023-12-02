@@ -31,13 +31,7 @@ def interactive_playground(
     """
     Interactive playground for querying the API with given credentials and profile
     """
-    credentials = json.loads(Path(credentials_file).read_text(encoding="utf-8"))
-    try:
-        credentials = credentials[credentials_profile]
-    except KeyError:
-        raise KeyError(f"Credentials profile {credentials_profile} not found in credentials file")
-
-    credentials = Credentials(**credentials)
+    credentials = Credentials.from_json(credentials_file, credentials_profile)
     querier = AzureQuerier.from_credentials(credentials)
 
     messages = []

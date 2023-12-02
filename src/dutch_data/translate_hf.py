@@ -47,6 +47,7 @@ def translate_hf_dataset(
     split: str | None = None,
     columns: list[str] = None,
     max_num_workers: int = 1,
+    timeout: float = 30.0,
     src_lang: str = "English",
     tgt_lang: str = "Dutch",
     hub_name: str | None = None,
@@ -65,6 +66,8 @@ def translate_hf_dataset(
     :param split: optional split for the dataset. If not given, all splits will be translated
     :param columns: optional list of column names to translate. Other columns will be dropped
     :param max_num_workers: maximum number of workers to use for the querier
+    :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
+    `timeout` seconds
     :param src_lang: source language that the texts are in (can be used in the prompt template)
     :param tgt_lang: target language to translate to (can be used in the prompt template)
     :param hub_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
@@ -76,14 +79,8 @@ def translate_hf_dataset(
     :return:
     """
     # Load Azure Querier
-    credentials = json.loads(Path(credentials_file).read_text(encoding="utf-8"))
-    try:
-        credentials = credentials[credentials_profile]
-    except KeyError:
-        raise KeyError(f"Credentials profile {credentials_profile} not found in credentials file")
-
-    credentials = Credentials(**credentials)
-    querier = AzureQuerier.from_credentials(credentials, max_workers=max_num_workers)
+    credentials = Credentials.from_json(credentials_file, credentials_profile)
+    querier = AzureQuerier.from_credentials(credentials, max_workers=max_num_workers, timeout=timeout)
 
     # Load potential pre-existing data
     pdout = Path(dout).resolve()
