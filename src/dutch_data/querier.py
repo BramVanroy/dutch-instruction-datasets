@@ -70,9 +70,8 @@ class AzureQuerier:
                     f" {messages}"
                 )
 
-        # Timeout a little bit longer every time
-        timeout = self.timeout * self.max_retries / max_retries
-        sleep(timeout)
+        # Timeout -1 to avoid potential race conditions with the internal Python request timeout (?)
+        sleep(max(0., self.timeout-1.0))
 
         return max_retries
 
