@@ -65,7 +65,8 @@ def translate_hf_dataset(
     :param config_name: optional config name for the dataset
     :param split: optional split for the dataset. If not given, all splits will be translated
     :param columns: optional list of column names to translate. Other columns will be dropped
-    :param max_num_workers: maximum number of workers to use for the querier
+    :param max_num_workers: maximum number of workers to use for the querier. Note that it is no use to set a very
+    high number here as the API will throttle you anyway You can try a few values to see what works best.
     :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
     `timeout` seconds
     :param src_lang: source language that the texts are in (can be used in the prompt template)

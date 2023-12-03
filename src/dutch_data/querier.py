@@ -1,3 +1,4 @@
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
@@ -6,7 +7,7 @@ from typing import Any, Generator
 
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
-from openai import AzureOpenAI, BadRequestError, OpenAIError
+from openai import AzureOpenAI, BadRequestError, OpenAIError, RateLimitError
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 
@@ -109,6 +110,13 @@ class AzureQuerier:
                 # will throw this exception. No use to retry these.
                 if isinstance(exc, BadRequestError):
                     return Response(job_idx, messages, None, exc)
+                elif isinstance(exc, RateLimitError):
+                    print(
+                        f"Rate limit exceeded ('{exc.message}'). We're timing out now and retrying later, but you may"
+                        f" want to consider:\n\t. changing your API rate limits;\n\t2. decreasing the number of"
+                        f" parallel workers\n\t3. increasing the timeout\n... and then restarting the script.",
+                        file=sys.stderr,
+                    )
 
                 try:
                     max_retries = self.update_patience(max_retries, exc, messages=messages)
