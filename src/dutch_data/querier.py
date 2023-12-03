@@ -113,8 +113,8 @@ class AzureQuerier:
                 elif isinstance(exc, RateLimitError):
                     print(
                         f"Rate limit exceeded ('{exc.message}'). We're timing out now and retrying later, but you may"
-                        f" want to consider:\n\t. changing your API rate limits;\n\t2. decreasing the number of"
-                        f" parallel workers\n\t3. increasing the timeout\n... and then restarting the script.",
+                        f" want to consider:\n  1. changing your API rate limits;\n  2. decreasing the number of"
+                        f" parallel workers\n  3. increasing the timeout\n... and then restarting the script.",
                         file=sys.stderr,
                     )
 

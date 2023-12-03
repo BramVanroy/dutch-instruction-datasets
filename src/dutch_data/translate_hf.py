@@ -51,6 +51,7 @@ def translate_hf_dataset(
     src_lang: str = "English",
     tgt_lang: str = "Dutch",
     hub_name: str | None = None,
+    hub_revision: str | None = None,
     system_prompt_template: str | None = SYSTEM_TRANSLATION_PROMPT,
     merge_with_original: bool = True,
     **kwargs,
@@ -73,6 +74,8 @@ def translate_hf_dataset(
     :param tgt_lang: target language to translate to (can be used in the prompt template)
     :param hub_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
     "MyUserName/my-dataset-name"
+    :param hub_revision: optional hub branch to upload to. If not specified, will use the default branch,
+    typically 'main'
     :param system_prompt_template: prompt template. Can optionally have "{src_lang}" and "{tgt_lang}" fields that will
     be replaced with the given source and target languages
     :param merge_with_original: whether to merge the translated dataset with the original dataset
@@ -216,7 +219,7 @@ def translate_hf_dataset(
         output_datasets.save_to_disk(pdout)
 
         if hub_name:
-            output_datasets.push_to_hub(hub_name)
+            output_datasets.push_to_hub(hub_name, revision=hub_revision)
 
         return output_datasets
     else:
