@@ -83,9 +83,7 @@ def translate_orcadpo_system_question(
     ] = None,
     hub_revision: Annotated[
         Optional[str],
-        Option(
-            help="hub branch to upload to. If not specified, will use the default branch, typically 'main'."
-        ),
+        Option(help="hub branch to upload to. If not specified, will use the default branch, typically 'main'."),
     ] = None,
     max_num_workers: Annotated[int, Option(help="how many parallel workers to use to query the API")] = 6,
     max_tokens: Annotated[int, Option(help="max new tokens to generate with the API")] = 2048,
