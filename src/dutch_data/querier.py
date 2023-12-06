@@ -145,7 +145,7 @@ class AzureQuerier:
                         # Sometimes it seems that the model returns an empty completion, but the finish reason is
                         # "content_filter". In this case, we should not retry, but return the empty completion.
                         if completion.choices[0].finish_reason == "content_filter":
-                            return Response(job_idx, messages, None, BadRequestError("Content filter triggered"))
+                            return Response(job_idx, messages, None, BadRequestError(response=completion, body=completion, request=None, message="Content filter triggered"))
 
                         # Still did not find the response, so retry
                         try:
