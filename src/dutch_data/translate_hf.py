@@ -187,6 +187,7 @@ def translate_hf_dataset(
                             raise translation_result.error
                     else:
                         chunk[f"translation_{tgt_lang.lower()}"] = translation_result.result.strip()
+                        chunk["error"] = str(translation_result.error)
                         translations.append(chunk)
                         # Using pd for easy encoding and potential troubles with newlines and such
                         chunk_df = pd.DataFrame([chunk])
