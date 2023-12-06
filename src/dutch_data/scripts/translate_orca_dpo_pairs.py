@@ -85,9 +85,10 @@ def translate_orcadpo_system_question(
         Optional[str],
         Option(help="hub branch to upload to. If not specified, will use the default branch, typically 'main'."),
     ] = None,
-    max_num_workers: Annotated[int, Option(help="how many parallel workers to use to query the API")] = 6,
+    max_num_workers: Annotated[int, Option("--max_num_workers", "-j", help="how many parallel workers to use to query the API")] = 6,
     max_tokens: Annotated[int, Option(help="max new tokens to generate with the API")] = 2048,
-    timeout: Annotated[float, Option(help="timeout in seconds for each API call")] = 60.0,
+    timeout: Annotated[float, Option("--timeout", "-t", help="timeout in seconds for each API call")] = 30.0,
+    verbose: Annotated[bool, Option("--verbose", "-v", help="whether to print more information of the API responses")] = False,
 ):
     sys_msg = _TRANSLATION_PROMPT if tgt_lang.lower() == "dutch" else SYSTEM_TRANSLATION_PROMPT
 
@@ -105,4 +106,5 @@ def translate_orcadpo_system_question(
         system_prompt_template=sys_msg,
         max_tokens=max_tokens,
         timeout=timeout,
+        verbose=verbose,
     )

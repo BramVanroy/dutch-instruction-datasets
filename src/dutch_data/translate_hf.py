@@ -54,6 +54,7 @@ def translate_hf_dataset(
     hub_revision: str | None = None,
     system_prompt_template: str | None = SYSTEM_TRANSLATION_PROMPT,
     merge_with_original: bool = True,
+        verbose: bool = False,
     **kwargs,
 ) -> DatasetDict | None:
     """
@@ -79,12 +80,13 @@ def translate_hf_dataset(
     :param system_prompt_template: prompt template. Can optionally have "{src_lang}" and "{tgt_lang}" fields that will
     be replaced with the given source and target languages
     :param merge_with_original: whether to merge the translated dataset with the original dataset
+    :param verbose: whether to print more information of the API responses
     :param kwargs: any keyword arguments to pass to the OpenAI API (such as max tokens, frequency penalty, etc.)
     :return:
     """
     # Load Azure Querier
     credentials = Credentials.from_json(credentials_file, credentials_profile)
-    querier = AzureQuerier.from_credentials(credentials, max_workers=max_num_workers, timeout=timeout)
+    querier = AzureQuerier.from_credentials(credentials, max_workers=max_num_workers, timeout=timeout, verbose=verbose)
 
     # Load potential pre-existing data
     pdout = Path(dout).resolve()
@@ -173,18 +175,12 @@ def translate_hf_dataset(
                     }
 
                     if translation_result.error is not None:
-                        # For BadRequests, caused by offensive, sexual, inappropriate content, will never work
-                        # so we write them to a separate file and ignore them forever
-                        if isinstance(translation_result.error, BadRequestError):
-                            chunk_df_failed = pd.DataFrame([chunk])
-                            chunk["error"] = str(translation_result.error)
-                            chunk_df_failed.to_csv(
-                                fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
-                            )
-                            fhout_failed.flush()
-                        else:
-                            # Unexpected error after retries, so we stop everything and raise error in main thread
-                            raise translation_result.error
+                        chunk_df_failed = pd.DataFrame([chunk])
+                        chunk["error"] = str(translation_result.error)
+                        chunk_df_failed.to_csv(
+                            fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
+                        )
+                        fhout_failed.flush()
                     else:
                         chunk[f"translation_{tgt_lang.lower()}"] = translation_result.result.strip()
                         chunk["error"] = str(translation_result.error)

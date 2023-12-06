@@ -40,6 +40,7 @@ class AzureQuerier:
     max_retries: int = 3
     timeout: float = 30.0
     max_workers: int = 6
+    verbose: bool = False
     client: AzureOpenAI = field(default=None, init=False)
 
     def __post_init__(self):
@@ -79,6 +80,10 @@ class AzureQuerier:
                     f" {messages}"
                 )
 
+        if self.verbose:
+            print(f"Timing out for {self.timeout}s and retrying ({remaining_retries} retries left)", file=sys.stderr,
+                            flush=True)
+
         sleep(self.timeout)
 
         return remaining_retries
@@ -109,13 +114,28 @@ class AzureQuerier:
                 # Bad requests, like malformed requests or those with filtered hate speech, sexual content, etc.
                 # will throw this exception. No use to retry these.
                 if isinstance(exc, BadRequestError):
+                    if self.verbose:
+                        print(
+                            f"Bad request: {exc.message}\n\nCheck your request for the following messages: {messages}",
+                            file=sys.stderr,
+                            flush=True
+                        )
                     return Response(job_idx, messages, None, exc)
                 elif isinstance(exc, RateLimitError):
+                    if self.verbose:
+                        print(
+                            f"Rate limit exceeded ('{exc.message}'). We're timing out now and retrying later, but you may"
+                            f" want to consider:\n  1. changing your API rate limits;\n  2. decreasing the number of"
+                            f" parallel workers\n  3. increasing the timeout\n... and then restarting the script.",
+                            file=sys.stderr,
+                            flush=True
+                        )
+
+                if self.verbose:
                     print(
-                        f"Rate limit exceeded ('{exc.message}'). We're timing out now and retrying later, but you may"
-                        f" want to consider:\n  1. changing your API rate limits;\n  2. decreasing the number of"
-                        f" parallel workers\n  3. increasing the timeout\n... and then restarting the script.",
+                        f"Exception in request: {exc.message}",
                         file=sys.stderr,
+                        flush=True
                     )
 
                 try:
@@ -125,6 +145,12 @@ class AzureQuerier:
                 continue
             else:
                 if not completion:
+                    if self.verbose:
+                        print(
+                            f"Unexpected empty completion for messages: {messages}",
+                            file=sys.stderr,
+                            flush=True
+                        )
                     try:
                         max_retries = self.update_patience(max_retries, messages=messages)
                     except Exception as exc:
@@ -145,9 +171,21 @@ class AzureQuerier:
                         # Sometimes it seems that the model returns an empty completion, but the finish reason is
                         # "content_filter". In this case, we should not retry, but return the empty completion.
                         if completion.choices[0].finish_reason == "content_filter":
+                            if self.verbose:
+                                print(
+                                    f"Content filter triggered for the following messages (so no response received):"
+                                    f" {messages}",
+                                    file=sys.stderr,
+                                    flush=True
+                                )
                             return Response(job_idx, messages, None, BadRequestError(response=completion, body=completion, request=None, message="Content filter triggered"))
 
                         # Still did not find the response, so retry
+                        print(
+                            f"Content response was empty for: {messages}",
+                            file=sys.stderr,
+                            flush=True
+                        )
                         try:
                             max_retries = self.update_patience(max_retries, messages=messages)
                         except Exception as exc:
