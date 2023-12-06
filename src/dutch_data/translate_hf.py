@@ -175,8 +175,8 @@ def translate_hf_dataset(
                     }
 
                     if translation_result.error is not None:
-                        chunk_df_failed = pd.DataFrame([chunk])
                         chunk["error"] = str(translation_result.error)
+                        chunk_df_failed = pd.DataFrame([chunk])
                         chunk_df_failed.to_csv(
                             fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
                         )
