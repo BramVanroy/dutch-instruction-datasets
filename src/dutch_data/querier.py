@@ -229,8 +229,8 @@ class AzureQuerier:
             )
 
         if self.max_workers < 2:
-            for messages in list_of_messages:
-                yield self._query_messages(messages, return_full_api_output, **kwargs)
+            for idx_and_messages in list_of_messages:
+                yield self._query_messages(idx_and_messages, return_full_api_output, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
