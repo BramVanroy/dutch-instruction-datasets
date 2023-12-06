@@ -128,7 +128,7 @@ def translate_hf_dataset(
                     print(
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                     )
-
+                num_done = len(done_subset_idxs)
                 if failed_df is not None:
                     failed_subset_idxs = set(
                         failed_df[(failed_df["split"] == split_name) & (failed_df["column"] == lang_colname)][
@@ -137,6 +137,7 @@ def translate_hf_dataset(
                     )
                     print(f"Skipping {len(failed_subset_idxs)} failed examples in {split_name} - {column_name}")
                     done_subset_idxs = done_subset_idxs.union(failed_subset_idxs)
+                num_failed = len(failed_subset_idxs)
 
                 # Build messages. Take into account that the system prompt template is optional
                 messages = [
@@ -174,22 +175,27 @@ def translate_hf_dataset(
                         "idx": translation_result.job_idx,
                     }
 
-                    if translation_result.error is not None:
-                        chunk["error"] = str(translation_result.error)
-                        chunk_df_failed = pd.DataFrame([chunk])
-                        chunk_df_failed.to_csv(
-                            fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
-                        )
-                        fhout_failed.flush()
-                    else:
+                    if translation_result.error is None and translation_result.result is not None:
                         chunk[f"translation_{tgt_lang.lower()}"] = translation_result.result.strip()
-                        chunk["error"] = str(translation_result.error)
                         translations.append(chunk)
                         # Using pd for easy encoding and potential troubles with newlines and such
                         chunk_df = pd.DataFrame([chunk])
                         # Only write output header if we're at the top of the file
                         chunk_df.to_csv(fhout, index=False, header=fhout.tell() == 0, sep="\t", encoding="utf-8")
                         fhout.flush()
+                        num_done += 1
+                    else:
+                        chunk["error"] = str(translation_result.error)
+                        chunk_df_failed = pd.DataFrame([chunk])
+                        chunk_df_failed.to_csv(
+                            fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
+                        )
+                        fhout_failed.flush()
+                        num_failed += 1
+
+                    if verbose:
+                        print(f"Current progress in {split_name} - {column_name}: {num_done:,} done,"
+                              f" {num_failed:,} failed")
 
     if translations:
         df = pd.DataFrame(translations)
