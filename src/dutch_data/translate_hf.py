@@ -54,7 +54,7 @@ def translate_hf_dataset(
     hub_revision: str | None = None,
     system_prompt_template: str | None = SYSTEM_TRANSLATION_PROMPT,
     merge_with_original: bool = True,
-        verbose: bool = False,
+    verbose: bool = False,
     **kwargs,
 ) -> DatasetDict | None:
     """

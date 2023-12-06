@@ -81,8 +81,11 @@ class AzureQuerier:
                 )
 
         if self.verbose:
-            print(f"Timing out for {self.timeout}s and retrying ({remaining_retries} retries left)", file=sys.stderr,
-                            flush=True)
+            print(
+                f"Timing out for {self.timeout}s and retrying ({remaining_retries} retries left)",
+                file=sys.stderr,
+                flush=True,
+            )
 
         sleep(self.timeout)
 
@@ -118,7 +121,7 @@ class AzureQuerier:
                         print(
                             f"Bad request: {exc.message}\n\nCheck your request for the following messages: {messages}",
                             file=sys.stderr,
-                            flush=True
+                            flush=True,
                         )
                     return Response(job_idx, messages, None, exc)
                 elif isinstance(exc, RateLimitError):
@@ -128,15 +131,11 @@ class AzureQuerier:
                             f" want to consider:\n  1. changing your API rate limits;\n  2. decreasing the number of"
                             f" parallel workers\n  3. increasing the timeout\n... and then restarting the script.",
                             file=sys.stderr,
-                            flush=True
+                            flush=True,
                         )
 
                 if self.verbose:
-                    print(
-                        f"Exception in request: {exc.message}",
-                        file=sys.stderr,
-                        flush=True
-                    )
+                    print(f"Exception in request: {exc.message}", file=sys.stderr, flush=True)
 
                 try:
                     max_retries = self.update_patience(max_retries, exc, messages=messages)
@@ -146,11 +145,7 @@ class AzureQuerier:
             else:
                 if not completion:
                     if self.verbose:
-                        print(
-                            f"Unexpected empty completion for messages: {messages}",
-                            file=sys.stderr,
-                            flush=True
-                        )
+                        print(f"Unexpected empty completion for messages: {messages}", file=sys.stderr, flush=True)
                     try:
                         max_retries = self.update_patience(max_retries, messages=messages)
                     except Exception as exc:
@@ -176,16 +171,22 @@ class AzureQuerier:
                                     f"Content filter triggered for the following messages (so no response received):"
                                     f" {messages}",
                                     file=sys.stderr,
-                                    flush=True
+                                    flush=True,
                                 )
-                            return Response(job_idx, messages, None, BadRequestError(response=completion, body=completion, request=None, message="Content filter triggered"))
+                            return Response(
+                                job_idx,
+                                messages,
+                                None,
+                                BadRequestError(
+                                    response=completion,
+                                    body=completion,
+                                    request=None,
+                                    message="Content filter triggered",
+                                ),
+                            )
 
                         # Still did not find the response, so retry
-                        print(
-                            f"Content response was empty for: {messages}",
-                            file=sys.stderr,
-                            flush=True
-                        )
+                        print(f"Content response was empty for: {messages}", file=sys.stderr, flush=True)
                         try:
                             max_retries = self.update_patience(max_retries, messages=messages)
                         except Exception as exc:
@@ -244,7 +245,12 @@ class AzureQuerier:
 
     @classmethod
     def from_credentials(
-        cls, credentials: Credentials, max_retries: int = 3, timeout: float = 30.0, max_workers: int = 6
+        cls,
+        credentials: Credentials,
+        max_retries: int = 3,
+        timeout: float = 30.0,
+        max_workers: int = 6,
+        verbose: bool = False,
     ):
         """
         Initialize AzureQuerier from Credentials object.
@@ -252,6 +258,9 @@ class AzureQuerier:
         :param max_retries: maximum number of retries for API calls
         :param timeout: timeout for API calls
         :param max_workers: maximum number of workers for multi-threaded querying
+        :param verbose: whether to print more information of the API responses
         :return: Initialized AzureQuerier object
         """
-        return cls(**asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers)
+        return cls(
+            **asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
+        )
