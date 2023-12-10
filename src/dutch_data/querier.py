@@ -5,6 +5,8 @@ from functools import lru_cache
 from time import sleep
 from typing import Any, Generator
 
+from requests import RequestException
+
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
 from openai import AzureOpenAI, BadRequestError, OpenAIError, RateLimitError
@@ -25,6 +27,10 @@ class Response:
 
     def __hash__(self):
         return hash((self.job_idx, str(self.result)))
+
+
+class ContentFilterException(RequestException):
+    ...
 
 
 @dataclass
@@ -98,7 +104,7 @@ class AzureQuerier:
         """
         Query the Azure OpenAI API.
         :param messages: tuple of messages where the first item is the index of the job, and the second item is a
-         tuple of tuples of key/value pairs, to be transformerd back into a dict, e.g. ("role", "user")
+         tuple of tuples of key/value pairs, to be transformed back into a dict, e.g. ("role", "user")
         :param return_full_api_output: whether to return the full API output or only the generated text
         :param kwargs: any keyword arguments to pass to the API
         :return: tuple with the job index and generated text or full API output, depending on 'return_full_api_output'
@@ -177,12 +183,7 @@ class AzureQuerier:
                                 job_idx,
                                 messages,
                                 None,
-                                BadRequestError(
-                                    response=completion,
-                                    body=completion,
-                                    request=None,
-                                    message="Content filter triggered",
-                                ),
+                                ContentFilterException("Content filter triggered"),
                             )
 
                         # Still did not find the response, so retry
