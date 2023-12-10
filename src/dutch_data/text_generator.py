@@ -66,7 +66,11 @@ class HFTextGenerator(TextGenerator):
         :param kwargs: additional kwargs to pass to the pipeline call
         :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
         """
-        # If it's a single list of messages, wrap it in another list to form a batch of one
+        if "num_return_sequences" in kwargs:
+            raise ValueError(
+                "num_return_sequences is not supported when using the TextGenerator class."
+            )
+
         if isinstance(messages[0], dict):
             messages = [messages]
 
@@ -89,10 +93,11 @@ class HFTextGenerator(TextGenerator):
             **kwargs,
         )
 
+        # The outputs have an extra dimension because in the pipeline it is possible to return multiple sequences
         if len(generated) == 1:
-            return generated[0]["generated_text"]
+            return generated[0][0]["generated_text"]
 
-        return [gen["generated_text"] for gen in generated]
+        return [gen[0]["generated_text"] for gen in generated]
 
 
 @dataclass
