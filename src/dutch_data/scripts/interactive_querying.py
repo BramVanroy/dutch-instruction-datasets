@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from colorama import Back, Fore, Style
@@ -23,10 +23,10 @@ def build_message(role: str, content: str) -> dict[str, str]:
 @app.command()
 def huggingface(
     model_name: Annotated[str, typer.Argument(help="JSON file containing credentials")],
-    device_map: Annotated[str | int | None, typer.Option(help="device (map) to use")] = None,
+    device_map: Annotated[Optional[str], typer.Option(help="device (map) to use")] = None,
     load_in_8bit: Annotated[bool, typer.Option(help="whether to load the model in 8 bit precision")] = False,
     load_in_4bit: Annotated[bool, typer.Option(help="whether to load the model in 4 bit precision")] = False,
-    torch_dtype: Annotated[str | None, typer.Option(help="torch computation type to use")] = None,
+    torch_dtype: Annotated[Optional[str], typer.Option(help="torch computation type to use")] = None,
 ):
     generator = HFTextGenerator(
         model_name=model_name,
