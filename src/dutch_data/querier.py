@@ -5,13 +5,12 @@ from functools import lru_cache
 from time import sleep
 from typing import Any, Generator
 
-from requests import RequestException
-
 from dutch_data.credentials import Credentials
 from dutch_data.utils import dict_to_tuple
 from openai import AzureOpenAI, BadRequestError, OpenAIError, RateLimitError
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
+from requests import RequestException
 
 
 @dataclass
