@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Literal
 
 import torch
 from dutch_data import AzureQuerier
@@ -20,7 +21,7 @@ class HFTextGenerator(TextGenerator):
     device_map: dict[str, str | int | torch.device] | str | int | torch.device = None
     load_in_8bit: bool = False
     load_in_4bit: bool = False
-    torch_dtype: str | None = None
+    torch_dtype: torch.dtype | Literal["auto"] | None = None
     pipe: Pipeline = field(default=None, init=False)
 
     def __post_init__(self):
