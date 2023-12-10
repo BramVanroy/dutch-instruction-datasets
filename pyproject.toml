@@ -36,6 +36,8 @@ dependencies = [
     "pandas",
     "tiktoken",
     "tqdm",
+    "torch",
+    "transformers",
     "typer[all]",
 ]
 
