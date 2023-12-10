@@ -70,11 +70,15 @@ class HFTextGenerator(TextGenerator):
         if isinstance(messages[0], dict):
             messages = [messages]
 
-        prompted_messages = self.pipe.tokenizer.apply_chat_template(
-            messages, chat_template=chat_template, tokenize=False, add_generation_prompt=True
-        )
+        prompted_batch_messages = [
+            self.pipe.tokenizer.apply_chat_template(
+                msg, chat_template=chat_template, tokenize=False, add_generation_prompt=True
+            )
+            for msg in messages
+        ]
+
         generated = self.pipe(
-            prompted_messages,
+            prompted_batch_messages,
             max_new_tokens=max_new_tokens,
             do_sample=do_sample,
             temperature=temperature,
