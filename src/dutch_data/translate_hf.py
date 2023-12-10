@@ -194,8 +194,11 @@ def translate_hf_dataset(
                         num_failed += 1
 
                     if verbose:
-                        print(f"Current progress in {split_name} - {column_name}: {num_done:,} done,"
-                              f" {num_failed:,} failed", flush=True)
+                        print(
+                            f"Current progress in {split_name} - {column_name}: {num_done:,} done,"
+                            f" {num_failed:,} failed",
+                            flush=True,
+                        )
 
     if translations:
         df = pd.DataFrame(translations)

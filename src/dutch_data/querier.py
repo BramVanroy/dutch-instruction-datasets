@@ -177,11 +177,8 @@ class AzureQuerier:
                                 job_idx,
                                 messages,
                                 None,
-                                BadRequestError(
-                                    response=completion,
-                                    body=completion,
-                                    request=None,
-                                    message="Content filter triggered",
+                                Exception(
+                                    "Content filter triggered",
                                 ),
                             )
 

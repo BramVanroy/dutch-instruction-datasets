@@ -3,14 +3,12 @@ from dataclasses import dataclass, field
 
 import torch
 from dutch_data import AzureQuerier
+from openai.types.chat import ChatCompletion
 from transformers import Pipeline, pipeline
 
 
 @dataclass
 class TextGenerator(ABC):
-    def prompt_message(self):
-        pass
-
     @abstractmethod
     def query_messages(self, messages, **kwargs):
         raise NotImplementedError
@@ -40,7 +38,7 @@ class HFTextGenerator(TextGenerator):
 
     def query_messages(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | list[list[dict[str, str]]],
         max_new_tokens: int = 128,
         do_sample: bool = True,
         temperature: float = 1.0,
@@ -48,12 +46,13 @@ class HFTextGenerator(TextGenerator):
         top_p: float = 1.0,
         chat_template: str | None = None,
         return_full_text: bool = False,
+        batch_size: int = 1,
         **kwargs,
-    ) -> str:
+    ) -> str | list[str]:
         """
         Query the model with the given messages.
         :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
-        "content" keys
+        "content" keys in the case of single querying, or a list of such lists in the case of batch querying.
         :param max_new_tokens: max new tokens to generate
         :param do_sample: whether to use sampling or not
         :param temperature: sampling temperature
@@ -62,9 +61,14 @@ class HFTextGenerator(TextGenerator):
         :param chat_template: Jinja template for the chat structure. Will use the model's default but you can
         override it here or add another one if the model doesn't have one
         :param return_full_text: whether to return the full text (incl. prompt) or just the generated text
+        :param batch_size: batch size to use for the pipeline call
         :param kwargs: additional kwargs to pass to the pipeline call
-        :return: generated assistant response
+        :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
         """
+        # If it's a single list of messages, wrap it in another list to form a batch of one
+        if isinstance(messages[0], dict):
+            messages = [messages]
+
         prompted_messages = self.pipe.tokenizer.apply_chat_template(
             messages, chat_template=chat_template, tokenize=False, add_generation_prompt=True
         )
@@ -76,6 +80,42 @@ class HFTextGenerator(TextGenerator):
             top_k=top_k,
             top_p=top_p,
             return_full_text=return_full_text,
+            batch_size=batch_size,
             **kwargs,
         )
-        return generated[0]["generated_text"]
+
+        if len(generated) == 1:
+            return generated[0]["generated_text"]
+
+        return [gen["generated_text"] for gen in generated]
+
+
+@dataclass
+class AzureTextGenerator(TextGenerator):
+    querier: AzureQuerier
+
+    def query_messages(
+        self,
+        messages: list[dict[str, str]] | list[list[dict[str, str]]],
+        return_full_api_output: bool = False,
+        return_in_order: bool = True,
+        **kwargs,
+    ) -> str | list[str] | ChatCompletion | list[ChatCompletion]:
+        """
+        Query the model with the given messages.
+        :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
+        "content" keys in the case of single querying, or a list of such lists in the case of batch querying.
+        :param return_full_api_output: whether to return the full API output or only the generated text
+        :param return_in_order: whether to return the results in the order of the input
+        :param kwargs: any keyword arguments to pass to the API
+        :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
+        """
+        if isinstance(messages[0], dict):
+            messages = [messages]
+
+        responses = list(self.querier.query_list_of_messages(messages, **kwargs))
+
+        if len(responses) == 1:
+            return responses[0].result
+
+        return [response.result for response in responses]
