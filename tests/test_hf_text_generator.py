@@ -5,7 +5,7 @@ from dutch_data.text_generator import HFTextGenerator
 
 class TestHFTextGenerator(unittest.TestCase):
     def setUp(self):
-        self.model_name = "HuggingFaceH4/zephyr-7b-beta"
+        self.model_name = "GroNLP/gpt2-small-dutch"
         self.generator = HFTextGenerator(self.model_name)
 
     def test_initialization(self):

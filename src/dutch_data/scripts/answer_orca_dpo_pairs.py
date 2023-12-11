@@ -57,7 +57,9 @@ def answer_orcadpo_azure(
         bool, Option("--verbose", "-v", help="whether to print more information of the API responses")
     ] = False,
 ):
-
+    """
+    Let Azure answer the questions in a dataset from the Orca DPO set. (But should also work with other datasets
+    """
     return answer_hf_dataset(
         dataset_name=input_hub_name,
         question_column=question_column,
