@@ -127,6 +127,8 @@ def translate_hf_dataset(
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                     )
                 num_done = len(done_subset_idxs)
+
+                failed_subset_idxs = set()
                 if failed_df is not None:
                     failed_subset_idxs = set(
                         failed_df[(failed_df["split"] == split_name) & (failed_df["column"] == lang_colname)][
