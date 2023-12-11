@@ -2,6 +2,7 @@ run-backend.ps
 .eslintrc.js
 .venv
 .credentials.json
+/*.ipynb
 
 # ignore compiled styles
 *.css
