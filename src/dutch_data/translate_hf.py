@@ -1,11 +1,9 @@
-import json
 from os import PathLike
 from pathlib import Path
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from dutch_data import AzureQuerier, Credentials
-from openai import BadRequestError
 from tqdm import tqdm
 
 

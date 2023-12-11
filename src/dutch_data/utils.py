@@ -9,3 +9,13 @@ def dict_to_tuple(d: dict) -> tuple[tuple[Any, Any], ...]:
     :return: tuplified dict
     """
     return tuple(sorted(d.items()))
+
+
+def build_message(role: str, content: str) -> dict[str, str]:
+    """
+    Build a single message dictionary for the API
+    """
+    return {
+        "role": role,
+        "content": content,
+    }

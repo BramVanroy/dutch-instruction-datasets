@@ -6,18 +6,9 @@ from dutch_data import AzureQuerier, Credentials
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, TextGenerator
 from typer import Argument
 
+from dutch_data.utils import build_message
 
 app = typer.Typer()
-
-
-def build_message(role: str, content: str) -> dict[str, str]:
-    """
-    Build a single message dictionary for the API
-    """
-    return {
-        "role": role,
-        "content": content,
-    }
 
 
 @app.command()
