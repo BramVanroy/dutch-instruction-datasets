@@ -33,7 +33,7 @@ class HFTextGenerator(TextGenerator):
         }
         self.pipe = pipeline(
             "text-generation",
-            model=self.model_name,
+            model=self.modelname,
             model_kwargs=model_kwargs,
         )
 

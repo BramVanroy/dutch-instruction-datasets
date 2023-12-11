@@ -29,27 +29,27 @@ def answer_hf_dataset(
     **kwargs,
 ) -> DatasetDict | None:
     """
-    Translates a HuggingFace dataset using the Azure OpenAI API.
+    Answers a HuggingFace dataset using the Azure OpenAI API.
     :param dataset_name: dataset name compatible with HuggingFace datasets
     :param question_column: name of the column containing the questions to answer
     :param credentials_file: credentials file containing the Azure OpenAI API key
     :param credentials_profile: which credentials profile to use
-    :param dout: output directory to save the translated dataset to. Temporary progress will also
+    :param dout: output directory to save the answered dataset to. Temporary progress will also
     be saved here
     :param config_name: optional config name for the dataset
-    :param split: optional split for the dataset. If not given, all splits will be translated
+    :param split: optional split for the dataset. If not given, all splits will be answered
     :param input_revision: optional revision for the input dataset. If not given, the default revision will be used
     :param system_column: optional column containing the system messages to the questions
     :param max_num_workers: maximum number of workers to use for the querier. Note that it is no use to set a very
     high number here as the API will throttle you anyway You can try a few values to see what works best.
     :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
     `timeout` seconds
-    :param output_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
+    :param output_name: optional hub name to push the answered dataset to. Should start with an org or username, e.g.
     "MyUserName/my-dataset-name"
     :param output_revision: optional hub branch to upload to. If not specified, will use the default branch,
     typically 'main'
     be replaced with the given source and target languages
-    :param merge_with_original: whether to merge the translated dataset with the original dataset
+    :param merge_with_original: whether to merge the answered dataset with the original dataset
     :param verbose: whether to print more information of the API responses
     :param kwargs: any keyword arguments to pass to the OpenAI API (such as max tokens, frequency penalty, etc.)
     :return:
@@ -63,7 +63,7 @@ def answer_hf_dataset(
     pdout.mkdir(parents=True, exist_ok=True)
 
     already_done_df = None
-    pf_tmp = pdout.joinpath("tmp_openai_translations.tsv")
+    pf_tmp = pdout.joinpath("tmp_openai_answers.tsv")
     if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
         already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8", dtype={"idx": int})
 
@@ -80,7 +80,7 @@ def answer_hf_dataset(
     columns = [question_column, system_column] if system_column else [question_column]
     orig_dataset = orig_dataset.select_columns(columns)
 
-    # Translate
+    # Answer
     answers = already_done_df.to_dict(orient="records") if already_done_df is not None else []
     response_colname = f"response_{credentials_profile.lower()}"
     with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
@@ -93,7 +93,7 @@ def answer_hf_dataset(
                         ]["idx"].unique()
                 )
                 print(
-                    f"Skipping {len(done_subset_idxs)} already translated examples in {split_name}"
+                    f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}"
                 )
             num_done = len(done_subset_idxs)
 
@@ -121,7 +121,7 @@ def answer_hf_dataset(
                     ),
                 )
                 for sample_idx, sample in enumerate(split_dataset)
-                if sample_idx not in done_subset_idxs and sample.strip()
+                if sample_idx not in done_subset_idxs
             ]
 
             if not messages:

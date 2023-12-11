@@ -140,7 +140,7 @@ class AzureQuerier:
                         )
 
                 if self.verbose:
-                    print(f"Exception in request: {exc.message}", file=sys.stderr, flush=True)
+                    print(f"Exception in request: {exc.message if hasattr(exc, 'message') else exc}", file=sys.stderr, flush=True)
 
                 try:
                     max_retries = self.update_patience(max_retries, exc, messages=messages)
