@@ -204,6 +204,7 @@ def translate_hf_dataset(
         df = pd.DataFrame(translations)
         output_datasets = {}
         for split_name, split_group in df.groupby("split"):
+            done_subset_idxs = split_group["idx"].unique()
             split_group = split_group.drop(columns=["split"])
             # Pivot so that we get the expected output format
             # Also sort by the index (rows sorted like the original dataset) and then by column name
@@ -217,7 +218,8 @@ def translate_hf_dataset(
             split_ds = Dataset.from_pandas(split_group, preserve_index=False)
 
             if merge_with_original:
-                split_ds = concatenate_datasets([orig_dataset[split_name], split_ds], axis=1)
+                orig_split_ds = orig_dataset[split_name].select(done_subset_idxs)
+                split_ds = concatenate_datasets([orig_split_ds, split_ds], axis=1)
             split_ds = split_ds.select_columns(sorted(split_ds.column_names))
             output_datasets[split_name] = split_ds
 
