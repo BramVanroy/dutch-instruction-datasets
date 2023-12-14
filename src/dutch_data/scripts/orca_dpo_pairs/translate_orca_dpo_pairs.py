@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 
 import typer
-from dutch_data.translate_hf import SYSTEM_TRANSLATION_PROMPT, translate_hf_dataset
+from dutch_data.dataset_processing import SYSTEM_TRANSLATION_PROMPT, translate_hf_dataset
 from typer import Argument, Option
 
 

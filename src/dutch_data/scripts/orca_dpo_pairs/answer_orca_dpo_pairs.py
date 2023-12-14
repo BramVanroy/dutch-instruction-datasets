@@ -1,9 +1,9 @@
 from typing import Annotated, Optional
 
 import typer
+from dutch_data.dataset_processing import answer_hf_dataset
 from typer import Argument, Option
 
-from dutch_data.answer_hf import answer_hf_dataset
 
 app = typer.Typer()
 
@@ -18,14 +18,12 @@ def answer_orcadpo_azure(
         str,
         Argument(
             help="hub name to get a dataset from. Should start with an org or username,"
-                 " e.g. 'MyUserName/my-dataset-name'"
+            " e.g. 'MyUserName/my-dataset-name'"
         ),
     ],
     question_column: Annotated[
         str,
-        Argument(
-            help="name of the column containing the questions to answer"
-        ),
+        Argument(help="name of the column containing the questions to answer"),
     ],
     output_directory: Annotated[str, Argument(help="output directory to save the answered dataset to")],
     *,

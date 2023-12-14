@@ -1,4 +1,8 @@
+from dataclasses import dataclass
 from typing import Any
+
+from openai.types.chat import ChatCompletion
+from transformers import Conversation
 
 
 def dict_to_tuple(d: dict) -> tuple[tuple[Any, Any], ...]:
@@ -13,9 +17,25 @@ def dict_to_tuple(d: dict) -> tuple[tuple[Any, Any], ...]:
 
 def build_message(role: str, content: str) -> dict[str, str]:
     """
-    Build a single message dictionary for the API
+    Build a single message dictionary with role and content keys
     """
     return {
         "role": role,
         "content": content,
     }
+
+
+@dataclass
+class Response:
+    """
+    Class for storing the results of a query.
+    """
+
+    job_idx: int
+    messages: list[dict[str, str]]
+    result: str | ChatCompletion | None | Conversation = None
+    text_response: str | None = None
+    error: Exception | None = None
+
+    def __hash__(self):
+        return hash((self.job_idx, str(self.text_response)))

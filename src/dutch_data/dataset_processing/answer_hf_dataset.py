@@ -3,10 +3,9 @@ from pathlib import Path
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
-from dutch_data import AzureQuerier, Credentials
-from tqdm import tqdm
-
+from dutch_data.azure_utils import AzureQuerier, Credentials
 from dutch_data.utils import build_message
+from tqdm import tqdm
 
 
 def answer_hf_dataset(
@@ -22,6 +21,7 @@ def answer_hf_dataset(
     system_column: str | None = None,
     max_num_workers: int = 1,
     timeout: float = 30.0,
+    max_samples: int | None = None,
     output_name: str | None = None,
     output_revision: str | None = None,
     merge_with_original: bool = True,
@@ -30,6 +30,7 @@ def answer_hf_dataset(
 ) -> DatasetDict | None:
     """
     Answers a HuggingFace dataset using the Azure OpenAI API.
+    TODO: update with updated TextGenerators so that we can use Azure OR HF to do all of this
     :param dataset_name: dataset name compatible with HuggingFace datasets
     :param question_column: name of the column containing the questions to answer
     :param credentials_file: credentials file containing the Azure OpenAI API key
@@ -44,6 +45,7 @@ def answer_hf_dataset(
     high number here as the API will throttle you anyway You can try a few values to see what works best.
     :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
     `timeout` seconds
+    :param max_samples: maximum number of samples to translate. Useful for testing
     :param output_name: optional hub name to push the answered dataset to. Should start with an org or username, e.g.
     "MyUserName/my-dataset-name"
     :param output_revision: optional hub branch to upload to. If not specified, will use the default branch,
@@ -85,25 +87,18 @@ def answer_hf_dataset(
     response_colname = f"response_{credentials_profile.lower()}"
     with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
         for split_name, split_dataset in orig_dataset.items():
+            if max_samples is not None:
+                split_dataset = split_dataset.select(range(max_samples))
+
             done_subset_idxs = set()
             if already_done_df is not None:
-                done_subset_idxs = set(
-                    already_done_df[
-                        already_done_df["split"] == split_name
-                        ]["idx"].unique()
-                )
-                print(
-                    f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}"
-                )
+                done_subset_idxs = set(already_done_df[already_done_df["split"] == split_name]["idx"].unique())
+                print(f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}")
             num_done = len(done_subset_idxs)
 
             failed_subset_idxs = set()
             if failed_df is not None:
-                failed_subset_idxs = set(
-                    failed_df[failed_df["split"] == split_name][
-                        "idx"
-                    ].unique()
-                )
+                failed_subset_idxs = set(failed_df[failed_df["split"] == split_name]["idx"].unique())
                 print(f"Skipping {len(failed_subset_idxs)} failed examples in {split_name}")
                 done_subset_idxs = done_subset_idxs.union(failed_subset_idxs)
             num_failed = len(failed_subset_idxs)
@@ -160,8 +155,7 @@ def answer_hf_dataset(
 
                 if verbose:
                     print(
-                        f"Current progress in {split_name}: {num_done:,} done,"
-                        f" {num_failed:,} failed",
+                        f"Current progress in {split_name}: {num_done:,} done," f" {num_failed:,} failed",
                         flush=True,
                     )
 
@@ -179,7 +173,6 @@ def answer_hf_dataset(
                 .sort_index(axis=1)
                 .fillna("")
             )
-            print(split_group.head(3))
             split_ds = Dataset.from_pandas(split_group, preserve_index=False)
 
             if merge_with_original:

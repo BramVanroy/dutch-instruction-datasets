@@ -1,35 +1,46 @@
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
-from functools import lru_cache
 from time import sleep
 from typing import Any, Generator
 
-from dutch_data.credentials import Credentials
-from dutch_data.utils import dict_to_tuple
+from dutch_data.azure_utils.credentials import Credentials
+from dutch_data.utils import Response, dict_to_tuple
 from openai import AzureOpenAI, BadRequestError, OpenAIError, RateLimitError
-from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from requests import RequestException
 
 
-@dataclass
-class Response:
-    """
-    Class for storing the results of a query.
-    """
-
-    job_idx: int
-    messages: list[dict[str, str]]
-    result: str | ChatCompletion | None = None
-    error: Exception | None = None
-
-    def __hash__(self):
-        return hash((self.job_idx, str(self.result)))
-
-
 class ContentFilterException(RequestException):
     ...
+
+
+def _add_job_idx_to_messages(
+    list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]]
+) -> tuple[tuple[int, tuple[tuple[tuple[str, str], ...]]]]:
+    """
+    Add job idxs to messages and convert into tuples (which can be serialized).
+    :param list_of_messages: a list of messages, where each message is a list of tuples of key/value pairs. So
+     basically a list of conversations, where each conversation is a list of messages
+    :return: the modified list of messages with the job idx included and converted into tuples
+    """
+    add_job_idx = not isinstance(list_of_messages[0][0], int)
+    if add_job_idx:
+        list_of_messages = tuple(
+            [
+                (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
+                for job_idx, messages in enumerate(list_of_messages)
+            ]
+        )
+    else:
+        list_of_messages = tuple(
+            [
+                (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
+                for job_idx, messages in list_of_messages
+            ]
+        )
+
+    return list_of_messages
 
 
 @dataclass
@@ -46,7 +57,7 @@ class AzureQuerier:
     timeout: float = 30.0
     max_workers: int = 6
     verbose: bool = False
-    client: AzureOpenAI = field(default=None, init=False)
+    client: AzureOpenAI | None = field(default=None, init=False)
 
     def __post_init__(self):
         if self.max_retries < 1:
@@ -96,17 +107,14 @@ class AzureQuerier:
 
         return remaining_retries
 
-    @lru_cache(maxsize=1024)
-    def _query_messages(
-        self, messages: tuple[int, tuple[tuple[str, str], ...]], return_full_api_output: bool = False, **kwargs
-    ) -> Response:
+    def query_messages(self, messages: tuple[int, tuple[tuple[tuple[str, str], ...]]], **kwargs) -> Response:
         """
         Query the Azure OpenAI API.
+        TODO: make this compatible with batching. See https://platform.openai.com/docs/guides/rate-limits/batching-requests
         :param messages: tuple of messages where the first item is the index of the job, and the second item is a
          tuple of tuples of key/value pairs, to be transformed back into a dict, e.g. ("role", "user")
-        :param return_full_api_output: whether to return the full API output or only the generated text
         :param kwargs: any keyword arguments to pass to the API
-        :return: tuple with the job index and generated text or full API output, depending on 'return_full_api_output'
+        :return: Response object with results and/or potential errors
         """
         max_retries = self.max_retries
         # Transform messages back into required format.
@@ -128,7 +136,8 @@ class AzureQuerier:
                             file=sys.stderr,
                             flush=True,
                         )
-                    return Response(job_idx, messages, None, exc)
+
+                    return Response(job_idx=job_idx, messages=messages, result=None, text_response=None, error=exc)
                 elif isinstance(exc, RateLimitError):
                     if self.verbose:
                         print(
@@ -138,67 +147,60 @@ class AzureQuerier:
                             file=sys.stderr,
                             flush=True,
                         )
-
-                if self.verbose:
-                    print(f"Exception in request: {exc.message if hasattr(exc, 'message') else exc}", file=sys.stderr, flush=True)
+                else:
+                    if self.verbose:
+                        print(
+                            f"Exception in request: {exc.message if hasattr(exc, 'message') else exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
 
                 try:
                     max_retries = self.update_patience(max_retries, exc, messages=messages)
                 except Exception as exc:
-                    return Response(job_idx, messages, None, exc)
+                    return Response(job_idx=job_idx, messages=messages, result=None, text_response=None, error=exc)
                 continue
+            # Successful query, we got a response!
             else:
+                # ... but for some reason it can be empty?
                 if not completion:
                     if self.verbose:
                         print(f"Unexpected empty completion for messages: {messages}", file=sys.stderr, flush=True)
+
                     try:
                         max_retries = self.update_patience(max_retries, messages=messages)
                     except Exception as exc:
-                        return Response(job_idx, messages, None, exc)
+                        return Response(job_idx=job_idx, messages=messages, result=None, text_response=None, error=exc)
+
                     continue
 
-                if not return_full_api_output:
-                    # Only return generated text
-                    completion_str = completion.choices[0].message.content
-                    if not completion_str:
-                        # We did not find the response in the first choice, but maybe we can find it in other choices
-                        # If the model accidentally returned multiple choices?
-                        for idx in range(1, len(completion.choices)):
-                            completion_str = completion.choices[idx].message.content
-                            if completion_str:
-                                return Response(job_idx, messages, completion_str)
+                # Sometimes it seems that the model returns an empty completion, but the finish reason is
+                # "content_filter". In this case, we should not retry, but return the empty completion.
+                if completion.choices[0].finish_reason == "content_filter":
+                    if self.verbose:
+                        print(
+                            f"Content filter triggered for the following messages (so no response received):"
+                            f" {messages}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    return Response(
+                        job_idx=job_idx,
+                        messages=messages,
+                        result=None,
+                        text_response=None,
+                        error=ContentFilterException("Content filter triggered"),
+                    )
 
-                        # Sometimes it seems that the model returns an empty completion, but the finish reason is
-                        # "content_filter". In this case, we should not retry, but return the empty completion.
-                        if completion.choices[0].finish_reason == "content_filter":
-                            if self.verbose:
-                                print(
-                                    f"Content filter triggered for the following messages (so no response received):"
-                                    f" {messages}",
-                                    file=sys.stderr,
-                                    flush=True,
-                                )
-                            return Response(
-                                job_idx,
-                                messages,
-                                None,
-                                ContentFilterException("Content filter triggered"),
-                            )
-
-                        # Still did not find the response, so retry
-                        print(f"Content response was empty for: {messages}", file=sys.stderr, flush=True)
-                        try:
-                            max_retries = self.update_patience(max_retries, messages=messages)
-                        except Exception as exc:
-                            return Response(job_idx, messages, None, exc)
-                        continue
-                    return Response(job_idx, messages, completion_str)
-                return Response(job_idx, messages, completion)
+                # When we finally make it this far, everything is fine and we can return the result.
+                completion_str = completion.choices[0].message.content
+                return Response(
+                    job_idx=job_idx, messages=messages, result=completion, text_response=completion_str, error=None
+                )
 
     def query_list_of_messages(
         self,
         list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
-        return_full_api_output: bool = False,
         return_in_order: bool = True,
         **kwargs,
     ) -> Generator[Response, None, None]:
@@ -206,35 +208,19 @@ class AzureQuerier:
         Query the Azure OpenAI API with a list of messages.
         :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
         but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
-        :param return_full_api_output: whether to return the full API output or only the generated text
         :param return_in_order: whether to return the results in the order of the input
         :param kwargs: any keyword arguments to pass to the API
-        :return: a list of tuples with job indexes as the first item and as the second the generated text or full API
-         outputs, depending on 'return_full_api_output'
+        :return: a generator of Response objects
         """
-        add_job_idx = not isinstance(list_of_messages[0][0], int)
-        if add_job_idx:
-            list_of_messages = tuple(
-                [
-                    (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
-                    for job_idx, messages in enumerate(list_of_messages)
-                ]
-            )
-        else:
-            list_of_messages = tuple(
-                [
-                    (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
-                    for job_idx, messages in list_of_messages
-                ]
-            )
+        list_of_messages = _add_job_idx_to_messages(list_of_messages)
 
         if self.max_workers < 2:
             for idx_and_messages in list_of_messages:
-                yield self._query_messages(idx_and_messages, return_full_api_output, **kwargs)
+                yield self.query_messages(idx_and_messages, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
-                    executor.submit(self._query_messages, idx_and_messages, return_full_api_output, **kwargs)
+                    executor.submit(self.query_messages, idx_and_messages, **kwargs)
                     for idx_and_messages in list_of_messages
                 ]
 

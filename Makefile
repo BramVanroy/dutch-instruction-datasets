@@ -1,14 +1,13 @@
 # Format source code automatically
 style:
-	black src/dutch_data
-	isort src/dutch_data
+	black src/dutch_data tests
+	isort src/dutch_data tests
 
 # Control quality
 quality:
-	black --check --diff src/dutch_data
-	isort --check-only src/dutch_data
-	flake8 src/dutch_data
-	mypy src/dutch_data --check-untyped-defs
+	black --check --diff src/dutch_data tests
+	isort --check-only src/dutch_data tests
+	flake8 src/dutch_data tests
 
 # Run tests
 test:

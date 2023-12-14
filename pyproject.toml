@@ -50,9 +50,8 @@ repository = "https://github.com/BramVanroy/dutch-instruction-datasets.git"
 dev = ["flake8", "black", "isort", "numpy", "mypy", "pytest"]
 
 [project.scripts]
-generate-subtopics = "dutch_data.scripts.generate_ultrachat_subtopics:app"
-translate-orcadpo = "dutch_data.scripts.translate_orca_dpo_pairs:app"
-answer-orcadpo = "dutch_data.scripts.answer_orca_dpo_pairs:app"
+translate-orcadpo = "dutch_data.scripts.orca_dpo_pairs.translate_orca_dpo_pairs:app"
+answer-orcadpo = "dutch_data.scripts.orca_dpo_pairs.answer_orca_dpo_pairs:app"
 interactive-query = "dutch_data.scripts.interactive_querying:app"
 
 # TOOLS
