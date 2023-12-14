@@ -152,11 +152,7 @@ class AzureTextGenerator(TextGenerator):
         :param kwargs: any keyword arguments to pass to the API
         :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
         """
-        responses = list(
-            self.querier.query_list_of_messages(
-                [messages], return_in_order=return_in_order, **kwargs
-            )
-        )
+        responses = list(self.querier.query_list_of_messages([messages], return_in_order=return_in_order, **kwargs))
 
         return responses[0]
 

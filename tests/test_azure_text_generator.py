@@ -1,18 +1,19 @@
 import types
 import unittest
+from pathlib import Path
 
-from dutch_data.text_generator import HFTextGenerator
+from dutch_data.azure_utils import AzureQuerier, Credentials
+from dutch_data.text_generator import AzureTextGenerator
 from dutch_data.utils import Response
-from transformers import ConversationalPipeline
 
 
-class TestHFTextGenerator(unittest.TestCase):
+class TestAzureTextGenerator(unittest.TestCase):
     def setUp(self):
-        self.model_name = "microsoft/DialoGPT-small"
-        self.generator = HFTextGenerator(self.model_name, device_map="auto")
-
-    def test_initialization(self):
-        self.assertIsInstance(self.generator.pipe, ConversationalPipeline)
+        # Assumes that the credentials file is in the root directory of the project
+        credentials_file = Path(__file__).parents[1] / ".credentials.json"
+        credentials = Credentials.from_json(credentials_file)
+        self.querier = AzureQuerier.from_credentials(credentials)
+        self.generator = AzureTextGenerator(self.querier)
 
     def test_query_messages(self):
         messages = [
