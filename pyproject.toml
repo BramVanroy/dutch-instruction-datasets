@@ -47,7 +47,7 @@ documentation = "https://github.com/BramVanroy/dutch-instruction-datasets"
 repository = "https://github.com/BramVanroy/dutch-instruction-datasets.git"
 
 [project.optional-dependencies]
-dev = ["flake8", "black", "isort", "numpy", "mypy", "pytest"]
+dev = ["flake8", "black", "isort", "pytest"]
 
 [project.scripts]
 translate-orcadpo = "dutch_data.scripts.orca_dpo_pairs.translate_orca_dpo_pairs:app"
@@ -75,8 +75,10 @@ known_first_party = "dutch_data"
 lines_after_imports = 2
 
 [tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:tensorflow.*:",
+]
 testpaths = ["tests"]
-filterwarnings = ["ignore::DeprecationWarning:tensorflow.*:"]
 
 # flake8 is in setup.cfg as it does not support toml:
 # https://github.com/PyCQA/flake8/issues/234

@@ -1,3 +1,4 @@
+import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
@@ -28,14 +29,30 @@ def _add_job_idx_to_messages(
     if add_job_idx:
         list_of_messages = tuple(
             [
-                (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
+                (
+                    job_idx,
+                    tuple(
+                        [
+                            dict_to_tuple(message_d) if isinstance(message_d, dict) else message_d
+                            for message_d in messages
+                        ]
+                    ),
+                )
                 for job_idx, messages in enumerate(list_of_messages)
             ]
         )
     else:
         list_of_messages = tuple(
             [
-                (job_idx, tuple([dict_to_tuple(message_d) for message_d in messages]))
+                (
+                    job_idx,
+                    tuple(
+                        [
+                            dict_to_tuple(message_d) if isinstance(message_d, dict) else message_d
+                            for message_d in messages
+                        ]
+                    ),
+                )
                 for job_idx, messages in list_of_messages
             ]
         )
@@ -107,9 +124,10 @@ class AzureQuerier:
 
         return remaining_retries
 
-    def query_messages(self, messages: tuple[int, tuple[tuple[tuple[str, str], ...]]], **kwargs) -> Response:
+    def _query_api(self, messages: tuple[int, tuple[tuple[tuple[str, str], ...]]], **kwargs) -> Response:
         """
-        Query the Azure OpenAI API.
+        Query the Azure OpenAI API. This is mostly intended for internal use (because it requires having an index and
+        converting the messages into the required format), but can be used externally as well.
         TODO: make this compatible with batching. See https://platform.openai.com/docs/guides/rate-limits/batching-requests
         :param messages: tuple of messages where the first item is the index of the job, and the second item is a
          tuple of tuples of key/value pairs, to be transformed back into a dict, e.g. ("role", "user")
@@ -117,6 +135,15 @@ class AzureQuerier:
         :return: Response object with results and/or potential errors
         """
         max_retries = self.max_retries
+
+        if not isinstance(messages[0], int) or not isinstance(messages[1], tuple):
+            raise ValueError(
+                f"messages must be a tuple of (job_idx, messages), but got ({type(messages[0])}, {type(messages[1])})."
+                f" This input format is mostly intended for internal use, but can be used externally as well, so for"
+                f" an easier entrypoint it is recommended to use query_list_of_messages instead, which works on "
+                f"'lists' of messages instead of singletons."
+            )
+
         # Transform messages back into required format.
         job_idx = messages[0]
         messages = [dict(message) for message in messages[1]]
@@ -187,7 +214,7 @@ class AzureQuerier:
                     return Response(
                         job_idx=job_idx,
                         messages=messages,
-                        result=None,
+                        result=completion,
                         text_response=None,
                         error=ContentFilterException("Content filter triggered"),
                     )
@@ -197,6 +224,16 @@ class AzureQuerier:
                 return Response(
                     job_idx=job_idx, messages=messages, result=completion, text_response=completion_str, error=None
                 )
+
+    def query_messages(self, messages: list[ChatCompletionMessageParam], return_in_order: bool = True, **kwargs) -> Response:
+        """
+        Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
+        :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
+        :param return_in_order: whether to return the results in the order of the input
+        :param kwargs: any keyword arguments to pass to the API
+        :return: Response object with results and/or potential errors
+        """
+        return next(self.query_list_of_messages([messages], return_in_order=return_in_order, **kwargs))
 
     def query_list_of_messages(
         self,
@@ -212,15 +249,33 @@ class AzureQuerier:
         :param kwargs: any keyword arguments to pass to the API
         :return: a generator of Response objects
         """
+
+        if (
+            not isinstance(list_of_messages, list)
+            or not isinstance(list_of_messages[0], (tuple, list))
+            or not isinstance(list_of_messages[0][0], (int, dict))
+        ):
+            example_input = [
+                [{"role": "system", "content": "You are a good AI"}, {"role": "user", "content": "hi"}],
+                {"role": "user", "content": "good morning"},
+            ]
+            pretty_example = json.dumps(example_input, indent=2)
+            raise ValueError(
+                f"list_of_messages is expected to be a list of conversations, where each conversation is a list of"
+                f" messages. For instance,\n{pretty_example}"
+                f"\nFor advanced use cases, you could also add job idxs yourself by passing a list of tuples of"
+                f" (job_idx, messages) where messages is still expected to be a list of dicts (or compatible)."
+            )
+
         list_of_messages = _add_job_idx_to_messages(list_of_messages)
 
         if self.max_workers < 2:
             for idx_and_messages in list_of_messages:
-                yield self.query_messages(idx_and_messages, **kwargs)
+                yield self._query_api(idx_and_messages, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
-                    executor.submit(self.query_messages, idx_and_messages, **kwargs)
+                    executor.submit(self._query_api, idx_and_messages, **kwargs)
                     for idx_and_messages in list_of_messages
                 ]
 

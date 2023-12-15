@@ -55,7 +55,7 @@ class MultiAzureQuerier:
     def _query_messages(self, idx_and_messages, return_full_api_output, **kwargs):
         querier = self.querier_queue.pop()
         start_time = time.perf_counter_ns()
-        result = querier.query_messages(idx_and_messages, return_full_api_output, **kwargs)
+        result = querier._query_api(idx_and_messages, return_full_api_output, **kwargs)
         end_time = time.perf_counter_ns()
         # Record the time it took to query the API for this specific querier
         self.querier_queue.push(querier, end_time - start_time)
