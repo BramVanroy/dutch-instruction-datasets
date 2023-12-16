@@ -8,18 +8,11 @@ from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
 from typer import Argument, Option
 
 
-# NOTE: this prompt has around 1250 tokens so it will be quite expensive to run. It is relatively robust, however.
-# This was written at the start of the project. In retro-spect it would have been much smarter to have separate prompts
-# to translate system messages vs. user messages. This functionality exists (TranslateHFDataset.system_prompt accepts
-# a dictionary of colname: sys_prompt to have separate ones), but for reproducibility we keep the default script like
-# it is now.
 _TRANSLATION_PROMPT = """Je bent een vertaler die Engels naar Nederlands vertaalt in hoge kwaliteit. Je vermijdt letterlijke vertalingen. Je zorgt voor een vloeiende en leesbare tekst. Je vermijdt bias, zoals gender bias en regionale bias. Je gebruikt informeel Standaardnederlands. Je doet ook aan lokalisatie, waar je je vertaling waar nodig aanpast aan de Nederlandse taal en de cultuur binnen het Nederlandstalige taalgebied (Nederland, Vlaanderen, en daarbuiten).
 
 Hoofddoel: Vertaal alle gebruikersvragen naar het Nederlands, met uitzondering van specifieke gebruikersvragen die vertaalopdrachten bevatten.
 
 Vertalen, Niet Beantwoorden: Bij elke gebruikersvraag, ongeacht de inhoud of vorm (zoals bevelen, vragen, raadsels, oefeningen, of vertaalopdrachten), vertaal je de vraag naar het Nederlands zonder deze inhoudelijk te beantwoorden of op te lossen.
-
-Behoud van Broninformatie bij Vertaalopdrachten: Wanneer je een vertaalinstructie tegenkomt binnen een gebruikersvraag, vertaal je de instructie en behoud je de originele tekst in de brontaal. Vertaal de brontekst in de andere taal niet, maar kopieer deze naar je output in de oorspronkelijke taal.
 
 <voorbeelden>
 
@@ -27,17 +20,9 @@ Gebruikersvraag: "Write a poem about spring in French."
 Jouw reactie: Schrijf een gedicht over de lente in het Frans.
 Voorbeeldinfo: generieke instructie met een specifieke taal.
 
-Gebruikersvraag: "You are an AI assistant. Provide a detailed answer so user don’t need to search outside to understand the answer."
-Jouw reactie: Je bent een AI-assistent. Geef een gedetailleerd antwoord zodat de gebruiker niet verder moet zoeken om het antwoord te begrijpen.
-Voorbeeldinfo: vertaling van een generieke system-message voor een AI-assistent
-
 Gebruikersvraag: "Summarize the following news article about space exploration. [news article]"
 Jouw reactie: Vat het volgende nieuwsartikel over ruimteverkenning samen. [nieuwsartikel]
 Voorbeeldinfo: generieke instructie zonder een specifieke taal. Merk op dat de tekst simpelweg vertaald is, en dat de instructie om tekst samen te vatten niet werd gevolgd maar enkel vertaald. Het nieuwsartikel werd ook helemaal overgenomen in de doeltekst.
-
-Gebruikersvraag: "В процессе разучивания и шлифования программ Translate to English."
-Jouw reactie: В процессе разучивания и шлифования программ Vertaal naar het Engels.
-Voorbeeldinfo: een niet-Engelse taal werd gegeven, gevolgd door de instructie om te vertalen naar het Engels. De niet-Engelse taal moet behouden blijven.
 
 Gebruikersvraag: "What is the correct way to use 'their', 'they're', and 'there'?"
 Jouw reactie: Wat is de correcte manier om 'their', 'they're' en 'there' in het Engels te gebruiken?
@@ -49,15 +34,7 @@ Voorbeeldinfo: In de gebruikersvraag staat "pineapple" in het Engels, wat naar h
 
 Gebruikersvraag: "Fix this sentence's grammar: 'He don't know the answer'"
 Jouw reactie: Verbeter deze zin: 'Hij weet niet de antwoord'
-Voorbeeldinfo: Er werd een algemene instructie gegeven met een taalfout in het Engels. Dit werd niet letterlijk vertaald maar aangepast naar het Nederlands, met een gelijkaardige grammaticale fout in het Nederlands.
-
-Gebruikersvraag: "Translate this text to German: We never knew his name. But I knew his father back in high school. German:'"
-Jouw reactie: Vertaal deze tekst naar het Duits: We wisten zijn naam niet maar ik kende zijn vader vanop school. Duits:
-Voorbeeldinfo: De brontaal werd niet gespecificeerd, enkel de doeltaal (Duits). Daarom werd de brontekst naar het Nederlands vertaald.
-
-Gebruikersvraag: "Translate this English text to German: We never knew his name. But I knew his father back in high school. German:'"
-Jouw reactie: Vertaal deze Engelse tekst naar het Duits: We never knew his name. But I knew his father back in high school. Duits:
-Voorbeeldinfo: De brontaal werd gespecificeerd (English). Daarom werd de brontekst in het Engels behouden. Enkel de instructie werd vertaald.
+Voorbeeldinfo: Er werd een algemene instructie gegeven met een taalfout in het Engels. Dit werd niet letterlijk vertaald maar aangepast aan het Nederlands, met een gelijkaardige grammaticale fout in het Nederlands.
 
 </voorbeelden>
 
@@ -109,7 +86,7 @@ def translate_orcadpo_system_question(
     ] = False,
 ):
     """
-    Translate the 'system' and 'question' columns of the Intel/orca_dpo_pairs dataset to a given language
+    Translate the 'instruction' column of the openbmb/UltraFeedback dataset to a given language
     (default Dutch). Depending on the given arguments, will use either a HuggingFace model or the Azure API to
     translate the dataset. Will save the translated dataset to the given output directory. Optionally, will also
     upload the translated dataset to the given hub name and revision.
@@ -129,10 +106,10 @@ def translate_orcadpo_system_question(
 
     translator = TranslateHFDataset(
         text_generator=text_generator,
-        dataset_name="Intel/orca_dpo_pairs",
+        dataset_name="openbmb/UltraFeedback",
         tgt_lang=tgt_lang,
         dout=output_directory,
-        columns=["system", "question"],
+        columns=["instruction"],
         output_hub_name=output_hub_name,
         output_hub_revision=output_hub_revision,
         merge_with_original=True,
