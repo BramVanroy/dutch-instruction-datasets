@@ -82,8 +82,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                         "idx": answer_result.job_idx,
                     }
 
-                    if answer_result.error is None and answer_result.result is not None:
-                        result_row[self.response_column] = answer_result.result.strip()
+                    if answer_result.error is None and answer_result.text_response is not None:
+                        result_row[self.response_column] = answer_result.text_response.strip()
                         answers.append(result_row)
                         self._write_row_to_fh(fhout, result_row)
                         num_done += 1

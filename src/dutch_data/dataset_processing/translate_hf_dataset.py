@@ -118,8 +118,10 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                             "idx": translation_response.job_idx,
                         }
 
-                        if translation_response.error is None and translation_response.result is not None:
-                            result_row[f"translation_{self.tgt_lang.lower()}"] = translation_response.result.strip()
+                        if translation_response.error is None and translation_response.text_response is not None:
+                            result_row[
+                                f"translation_{self.tgt_lang.lower()}"
+                            ] = translation_response.text_response.strip()
                             translations.append(result_row)
                             self._write_row_to_fh(fhout, result_row)
                             num_done += 1

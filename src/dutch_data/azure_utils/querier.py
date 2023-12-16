@@ -8,7 +8,7 @@ from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.utils import Response, dict_to_tuple
 from openai import AzureOpenAI, BadRequestError
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from tenacity import Retrying, stop_after_attempt, wait_random_exponential, RetryError
+from tenacity import RetryError, Retrying, stop_after_attempt, wait_random_exponential
 from tenacity.retry import retry_if_not_exception_type
 
 
@@ -80,6 +80,9 @@ class AzureQuerier:
     def __post_init__(self):
         if self.max_retries < 1:
             raise ValueError("max_retries must be at least 1")
+
+        if self.timeout < 1:
+            raise ValueError("timeout must be at least 1")
 
         self.client = AzureOpenAI(
             api_version=self.api_version,
