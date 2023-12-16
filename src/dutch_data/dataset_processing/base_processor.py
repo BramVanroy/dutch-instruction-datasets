@@ -20,7 +20,6 @@ class BaseHFDatasetProcessor(ABC):
     be saved here
     :param config_name: optional config name for the dataset
     :param split: optional split for the dataset. If not given, all splits will be translated
-    :param columns: optional list of column names to translate. Other columns will be dropped
     :param max_samples: maximum number of samples to translate. Useful for testing
     :param output_hub_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
     "MyUserName/my-dataset-name"
@@ -35,7 +34,6 @@ class BaseHFDatasetProcessor(ABC):
     dout: PathLike | str
     config_name: str | None = None
     split: str | None = None
-    columns: list[str] | None = None
     max_samples: int | None = None
     output_hub_name: str | None = None
     output_hub_revision: str | None = None
@@ -53,7 +51,7 @@ class BaseHFDatasetProcessor(ABC):
         to the temporary file of failed results, and the dataframe with failed results
         """
         already_done_df = None
-        pf_tmp = self.dout.joinpath("tmp_openai_answers.tsv")
+        pf_tmp = self.dout.joinpath("tmp_openai_done.tsv")
         if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
             already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8", dtype={"idx": int})
 
@@ -98,14 +96,12 @@ class BaseHFDatasetProcessor(ABC):
 
     def _load_dataset(self) -> DatasetDict:
         """
-        Load the dataset from Hugging Face datasets. Optionally restricted to a specific split or columns.
+        Load the dataset from Hugging Face datasets. Optionally restricted to a specific split.
         :return: a loaded DatasetDict
         """
         orig_dataset: DatasetDict = load_dataset(self.dataset_name, name=self.config_name)
         if self.split is not None:
             orig_dataset = DatasetDict({"train": orig_dataset[self.split]})
-        if self.columns is not None:
-            orig_dataset = orig_dataset.select_columns(self.columns)
         return orig_dataset
 
     @staticmethod

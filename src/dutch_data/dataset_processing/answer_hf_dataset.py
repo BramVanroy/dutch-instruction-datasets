@@ -1,192 +1,118 @@
-from os import PathLike
-from pathlib import Path
+from dataclasses import dataclass
 
-import pandas as pd
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
-from dutch_data.azure_utils import AzureQuerier, Credentials
-from dutch_data.utils import build_message
+from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
 
-def answer_hf_dataset(
-    dataset_name: str,
-    question_column: str,
-    credentials_file: PathLike | str,
-    credentials_profile: str,
-    dout: PathLike | str,
-    *,
-    config_name: str | None = None,
-    split: str | None = None,
-    input_revision: str | None = None,
-    system_column: str | None = None,
-    max_num_workers: int = 1,
-    timeout: float = 30.0,
-    max_samples: int | None = None,
-    output_name: str | None = None,
-    output_revision: str | None = None,
-    merge_with_original: bool = True,
-    verbose: bool = False,
-    **kwargs,
-) -> DatasetDict | None:
+@dataclass
+class AnswerHFDataset(BaseHFDatasetProcessor):
     """
     Answers a HuggingFace dataset using the Azure OpenAI API.
-    TODO: update with updated TextGenerators so that we can use Azure OR HF to do all of this
-    :param dataset_name: dataset name compatible with HuggingFace datasets
-    :param question_column: name of the column containing the questions to answer
-    :param credentials_file: credentials file containing the Azure OpenAI API key
-    :param credentials_profile: which credentials profile to use
-    :param dout: output directory to save the answered dataset to. Temporary progress will also
-    be saved here
-    :param config_name: optional config name for the dataset
-    :param split: optional split for the dataset. If not given, all splits will be answered
-    :param input_revision: optional revision for the input dataset. If not given, the default revision will be used
-    :param system_column: optional column containing the system messages to the questions
-    :param max_num_workers: maximum number of workers to use for the querier. Note that it is no use to set a very
-    high number here as the API will throttle you anyway You can try a few values to see what works best.
-    :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
-    `timeout` seconds
-    :param max_samples: maximum number of samples to translate. Useful for testing
-    :param output_name: optional hub name to push the answered dataset to. Should start with an org or username, e.g.
-    "MyUserName/my-dataset-name"
-    :param output_revision: optional hub branch to upload to. If not specified, will use the default branch,
-    typically 'main'
-    be replaced with the given source and target languages
-    :param merge_with_original: whether to merge the answered dataset with the original dataset
-    :param verbose: whether to print more information of the API responses
-    :param kwargs: any keyword arguments to pass to the OpenAI API (such as max tokens, frequency penalty, etc.)
-    :return:
+    :param content_role_columns: names of the columns and their associated roles in the conversation in order of
+    appearance. For example, if you have a column called "system" that contains the system messages and a column
+    called "user" that contains the user messages, you would pass {"system": "system", "user": "user"}. If you have
+    a column called "question" that contains the questions and no system messages, then you would pass
+    {"question": "user"}.
+    :param response_column: which column to write answers to
     """
-    # Load Azure Querier
-    credentials = Credentials.from_json(credentials_file, credentials_profile)
-    querier = AzureQuerier.from_credentials(credentials, max_workers=max_num_workers, timeout=timeout, verbose=verbose)
 
-    # Load potential pre-existing data
-    pdout = Path(dout).resolve()
-    pdout.mkdir(parents=True, exist_ok=True)
+    content_role_columns: dict[str, str] = None
+    response_column: str = "response"
 
-    already_done_df = None
-    pf_tmp = pdout.joinpath("tmp_openai_answers.tsv")
-    if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
-        already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8", dtype={"idx": int})
-
-    failed_df = None
-    pf_tmp_failed = pdout.joinpath("tmp_openai_failed.tsv")
-    if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
-        failed_df = pd.read_csv(pf_tmp_failed, sep="\t", encoding="utf-8", dtype={"idx": int})
-
-    # Load dataset
-    orig_dataset: DatasetDict = load_dataset(dataset_name, name=config_name, revision=input_revision)
-    if split is not None:
-        orig_dataset = DatasetDict({"train": orig_dataset[split]})
-
-    columns = [question_column, system_column] if system_column else [question_column]
-    orig_dataset = orig_dataset.select_columns(columns)
-
-    # Answer
-    answers = already_done_df.to_dict(orient="records") if already_done_df is not None else []
-    response_colname = f"response_{credentials_profile.lower()}"
-    with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
-        for split_name, split_dataset in orig_dataset.items():
-            if max_samples is not None:
-                split_dataset = split_dataset.select(range(max_samples))
-
-            done_subset_idxs = set()
-            if already_done_df is not None:
-                done_subset_idxs = set(already_done_df[already_done_df["split"] == split_name]["idx"].unique())
-                print(f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}")
-            num_done = len(done_subset_idxs)
-
-            failed_subset_idxs = set()
-            if failed_df is not None:
-                failed_subset_idxs = set(failed_df[failed_df["split"] == split_name]["idx"].unique())
-                print(f"Skipping {len(failed_subset_idxs)} failed examples in {split_name}")
-                done_subset_idxs = done_subset_idxs.union(failed_subset_idxs)
-            num_failed = len(failed_subset_idxs)
-
-            messages = [
-                (
-                    sample_idx,
-                    (
-                        [
-                            build_message("system", sample[system_column].strip()),
-                            build_message("user", sample[question_column].strip()),
-                        ]
-                        if system_column
-                        else [build_message("user", sample[question_column].strip())]
-                    ),
-                )
-                for sample_idx, sample in enumerate(split_dataset)
-                if sample_idx not in done_subset_idxs
-            ]
-
-            if not messages:
-                continue
-
-            print(f"Number of messages to answer: {len(messages)}")
-
-            for answer_result in tqdm(
-                querier.query_list_of_messages(messages, return_in_order=False, **kwargs),
-                total=len(messages),
-                desc=f"Translating {split_name}",
-            ):
-                chunk = {
-                    "split": split_name,
-                    "column": response_colname,
-                    "idx": answer_result.job_idx,
-                }
-
-                if answer_result.error is None and answer_result.result is not None:
-                    chunk[response_colname] = answer_result.result.strip()
-                    answers.append(chunk)
-                    # Using pd for easy encoding and potential troubles with newlines and such
-                    chunk_df = pd.DataFrame([chunk])
-                    # Only write output header if we're at the top of the file
-                    chunk_df.to_csv(fhout, index=False, header=fhout.tell() == 0, sep="\t", encoding="utf-8")
-                    fhout.flush()
-                    num_done += 1
-                else:
-                    chunk["error"] = str(answer_result.error)
-                    chunk_df_failed = pd.DataFrame([chunk])
-                    chunk_df_failed.to_csv(
-                        fhout_failed, index=False, header=fhout_failed.tell() == 0, sep="\t", encoding="utf-8"
-                    )
-                    fhout_failed.flush()
-                    num_failed += 1
-
-                if verbose:
-                    print(
-                        f"Current progress in {split_name}: {num_done:,} done," f" {num_failed:,} failed",
-                        flush=True,
-                    )
-
-    if answers:
-        df = pd.DataFrame(answers)
-        output_datasets = {}
-        for split_name, split_group in df.groupby("split"):
-            done_subset_idxs = sorted(split_group["idx"].unique())
-            split_group = split_group.drop(columns=["split"])
-            # Pivot so that we get the expected output format
-            # Also sort by the index (rows sorted like the original dataset) and then by column name
-            split_group = (
-                split_group.pivot(index="idx", columns="column", values=response_colname)
-                .sort_index()
-                .sort_index(axis=1)
-                .fillna("")
+    def __post_init__(self):
+        if self.content_role_columns is None:
+            raise ValueError(
+                "You must pass a dictionary of content role columns to 'content_role_columns', which indicates"
+                "which columns to include as well as their role (e.g. 'system', 'user' or 'assistant')."
             )
-            split_ds = Dataset.from_pandas(split_group, preserve_index=False)
+        elif any(role not in ("assistant", "system", "user") for role in self.content_role_columns.values()):
+            raise ValueError(
+                "When passing a dictionary as 'content_role_columns', its keys must be column names in the dataset"
+                " and its values must be one of 'assistant', 'system' or 'user'."
+            )
 
-            if merge_with_original:
-                orig_split_ds = orig_dataset[split_name].select(done_subset_idxs)
-                split_ds = concatenate_datasets([orig_split_ds, split_ds], axis=1)
-            split_ds = split_ds.select_columns(sorted(split_ds.column_names))
-            output_datasets[split_name] = split_ds
+    def process_dataset(self, **kwargs):
+        orig_dataset = self._load_dataset()
 
-        output_datasets = DatasetDict(output_datasets)
-        output_datasets.save_to_disk(pdout)
+        if self.response_column in orig_dataset.column_names:
+            raise ValueError(
+                f"Dataset already contains a column called '{self.response_column}'. Please choose another name."
+            )
 
-        if output_name:
-            output_datasets.push_to_hub(output_name, revision=output_revision)
+        if any(colname not in orig_dataset.column_names for colname in self.content_role_columns.keys()):
+            raise ValueError(
+                f"Dataset does not contain all the columns in 'content_role_columns':"
+                f" {self.content_role_columns.keys()}"
+            )
 
-        return output_datasets
-    else:
-        return None
+        pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
+
+        answers = already_done_df.to_dict(orient="records") if already_done_df is not None else []
+
+        with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
+            for split_name, split_dataset in orig_dataset.items():
+                if self.max_samples is not None:
+                    split_dataset = split_dataset.select(range(self.max_samples))
+
+                # Get the IDs of the examples that have already been translated or failed
+                done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
+                    already_done_df, failed_df, split_name
+                )
+
+                print(
+                    f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}"
+                    f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name}"
+                )
+
+                messages = self._prepare_messages(split_dataset, done_subset_idxs)
+
+                if not messages:
+                    continue
+
+                print(f"Number of messages to answer: {len(messages)}")
+
+                for answer_result in tqdm(
+                    self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
+                    total=len(messages),
+                    desc=f"Answering {split_name}",
+                ):
+                    result_row = {
+                        "split": split_name,
+                        "column": self.response_column,
+                        "idx": answer_result.job_idx,
+                    }
+
+                    if answer_result.error is None and answer_result.result is not None:
+                        result_row[self.response_column] = answer_result.result.strip()
+                        answers.append(result_row)
+                        self._write_row_to_fh(fhout, result_row)
+                        num_done += 1
+                    else:
+                        result_row["error"] = str(answer_result.error)
+                        self._write_row_to_fh(fhout_failed, result_row)
+                        num_failed += 1
+
+                    if self.verbose:
+                        print(
+                            f"Current progress in {split_name}: {num_done:,} done,"
+                            f" {num_failed:,} failed",
+                            flush=True,
+                        )
+
+        if answers:
+            output_datasets = self._postprocess_dataset(answers, orig_dataset, self.response_column)
+            return output_datasets
+        else:
+            return None
+
+    def _prepare_messages(self, dataset, done_subset_idxs):
+        messages = [
+            (
+                sample_idx,
+                [{"role": role, "content": sample[colname]} for colname, role in self.content_role_columns.items()],
+            )
+            for sample_idx, sample in enumerate(dataset)
+            if sample_idx not in done_subset_idxs
+        ]
+
+        return messages

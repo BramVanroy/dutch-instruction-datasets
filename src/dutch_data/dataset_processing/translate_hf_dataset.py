@@ -1,10 +1,6 @@
 from dataclasses import dataclass
-from os import PathLike
-from pathlib import Path
 
-import pandas as pd
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
-from dutch_data.azure_utils import AzureQuerier, Credentials
+from datasets import DatasetDict
 from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
@@ -46,6 +42,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     Translates a HuggingFace dataset using the Azure OpenAI API.
     :param src_lang: source language that the texts are in (can be used in the prompt template)
     :param tgt_lang: target language to translate to (can be used in the prompt template)
+    :param columns: optional list of column names to translate. Other columns will be dropped
     :param system_prompt: system prompt or system prompt template. Can optionally have "{src_lang}" and/or "{tgt_lang}"
      fields that will be replaced with the given source and target languages. If not given, will use a default
      translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
@@ -54,6 +51,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
     src_lang: str = "English"
     tgt_lang: str = "Dutch"
+    columns: list[str] | None = None
     system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
 
     def __post_init__(self):
@@ -63,6 +61,16 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                     "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
                     " ('columns')."
                 )
+
+    def _load_dataset(self) -> DatasetDict:
+        """
+        Load the dataset from Hugging Face datasets. Optionally restricted to a specific split or columns.
+        :return: a loaded DatasetDict
+        """
+        orig_dataset: DatasetDict = super()._load_dataset()
+        if self.columns is not None:
+            orig_dataset = orig_dataset.select_columns(self.columns)
+        return orig_dataset
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
