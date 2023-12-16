@@ -8,7 +8,7 @@ from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.utils import Response, dict_to_tuple
 from openai import AzureOpenAI, BadRequestError
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from tenacity import Retrying, stop_after_attempt, wait_random_exponential
+from tenacity import Retrying, stop_after_attempt, wait_random_exponential, RetryError
 from tenacity.retry import retry_if_not_exception_type
 
 
@@ -136,6 +136,11 @@ class AzureQuerier:
                 f"Bad request error. Your input was likely malformed or contained inappropriate requests."
                 f" More details:\n{exc.message}"
             )
+        except RetryError as retry_error:
+            if retry_error.last_attempt.failed:
+                response["error"] = retry_error.last_attempt.result()
+            else:
+                response["error"] = retry_error
         except Exception as exc:
             response["error"] = exc
         else:
