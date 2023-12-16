@@ -94,8 +94,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
                     if self.verbose:
                         print(
-                            f"Current progress in {split_name}: {num_done:,} done,"
-                            f" {num_failed:,} failed",
+                            f"Current progress in {split_name}: {num_done:,} done," f" {num_failed:,} failed",
                             flush=True,
                         )
 

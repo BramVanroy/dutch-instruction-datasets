@@ -1,8 +1,8 @@
 from typing import Annotated, Optional
 
 import typer
-from dutch_data.azure_utils import AzureQuerier, Credentials
-from dutch_data.dataset_processing import SYSTEM_TRANSLATION_PROMPT, translate_hf_dataset
+from dutch_data.azure_utils import Credentials
+from dutch_data.dataset_processing import SYSTEM_TRANSLATION_PROMPT
 from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
 from typer import Argument, Option
