@@ -101,6 +101,7 @@ def translate_orcadpo_system_question(
     max_workers: Annotated[
         int, Option("--max-workers", "-j", help="(azure) how many parallel workers to use to query the API")
     ] = 6,
+    max_retries: Annotated[int, Option(help="(azure) how many times to retry on errors")] = 3,
     max_tokens: Annotated[int, Option(help="max new tokens to generate")] = 2048,
     timeout: Annotated[float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
     verbose: Annotated[
@@ -123,7 +124,7 @@ def translate_orcadpo_system_question(
     else:
         credentials = Credentials.from_json(credentials_file, credentials_profile)
         text_generator = AzureTextGenerator.from_credentials(
-            credentials, max_workers=max_workers, timeout=timeout, verbose=verbose
+            credentials, max_workers=max_workers, timeout=timeout, max_retries=max_retries, verbose=verbose
         )
 
     translator = TranslateHFDataset(
