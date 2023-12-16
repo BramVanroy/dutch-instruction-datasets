@@ -81,7 +81,12 @@ def interactive_playground(
         messages.append(user_message)
 
         response = generator.query_messages(messages)
-        print(f"{Back.MAGENTA}{Fore.WHITE}Assistant:{Style.RESET_ALL} ", response)
+
+        if not response.text_response and response.error is not None:
+            print(f"{Back.RED}{Fore.WHITE}AN ERROR OCCURRED{Style.RESET_ALL}. Terminaing...\n{response.error}")
+            raise response.error
+
+        print(f"{Back.MAGENTA}{Fore.WHITE}Assistant:{Style.RESET_ALL} ", response.text_response)
         print()
 
-        messages.append(build_message("assistant", response))
+        messages.append(build_message("assistant", response.text_response))
