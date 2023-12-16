@@ -70,11 +70,16 @@ app = typer.Typer()
 @app.command()
 def translate_orcadpo_system_question(
     output_directory: Annotated[str, Argument(help="output directory to save the translated dataset to")],
-    hf_model_name: Annotated[str, Option(help="HuggingFace model name to use for the text generator")],
-    credentials_file: Annotated[str, Option(help="JSON file containing credentials")],
+    hf_model_name: Annotated[
+        Optional[str],
+        Option(
+            help="HuggingFace model name to use for the text generator. Note that currently only conversational style models are supported"
+        ),
+    ] = None,
+    credentials_file: Annotated[Optional[str], Option(help="JSON file containing credentials")] = None,
     credentials_profile: Annotated[
-        str, Option(help="which credential profile (key) to use from the credentials file")
-    ],
+        Optional[str], Option(help="which credential profile (key) to use from the credentials file")
+    ] = None,
     tgt_lang: Annotated[
         str,
         Option(
