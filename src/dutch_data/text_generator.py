@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Generator, Literal
 
 import torch
-from dutch_data.azure_utils import AzureQuerier
+from dutch_data.azure_utils import AzureQuerier, Credentials
 from dutch_data.utils import Response
 from transformers import Conversation, Pipeline, pipeline
 
@@ -170,7 +170,27 @@ class AzureTextGenerator(TextGenerator):
         :param kwargs: any keyword arguments to pass to the API
         :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
         """
-        for response in self.querier.query_list_of_messages(
-            list_of_messages, return_in_order=return_in_order, **kwargs
-        ):
-            yield response
+        yield from self.querier.query_list_of_messages(list_of_messages, return_in_order=return_in_order, **kwargs)
+
+    @classmethod
+    def from_credentials(
+        cls,
+        credentials: Credentials,
+        max_retries: int = 3,
+        timeout: float = 30.0,
+        max_workers: int = 6,
+        verbose: bool = False,
+    ):
+        """
+        Initialize AzureQuerier from Credentials object.
+        :param credentials: Credentials object
+        :param max_retries: maximum number of retries for API calls
+        :param timeout: timeout for API calls
+        :param max_workers: maximum number of workers for multi-threaded querying
+        :param verbose: whether to print more information of the API responses
+        :return: Initialized AzureQuerier object
+        """
+        querier = AzureQuerier(
+            **asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
+        )
+        return cls(querier)

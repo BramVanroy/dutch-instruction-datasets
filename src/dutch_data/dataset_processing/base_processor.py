@@ -21,17 +21,13 @@ class BaseHFDatasetProcessor(ABC):
     :param config_name: optional config name for the dataset
     :param split: optional split for the dataset. If not given, all splits will be translated
     :param columns: optional list of column names to translate. Other columns will be dropped
-    :param max_num_workers: maximum number of workers to use for the querier. Note that it is no use to set a very
-    high number here as the API will throttle you anyway You can try a few values to see what works best.
-    :param timeout: timeout for the querier. A TimeOut error will be triggered if no response is received within
-    `timeout` seconds
     :param max_samples: maximum number of samples to translate. Useful for testing
     :param output_hub_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
     "MyUserName/my-dataset-name"
     :param output_hub_revision: optional hub branch to upload to. If not specified, will use the default branch,
     typically 'main' be replaced with the given source and target languages
     :param merge_with_original: whether to merge the translated dataset with the original dataset
-    :param verbose: whether to print more information of the API responses
+    :param verbose: whether to print more information
     """
 
     dataset_name: str
@@ -40,8 +36,6 @@ class BaseHFDatasetProcessor(ABC):
     config_name: str | None = None
     split: str | None = None
     columns: list[str] | None = None
-    max_num_workers: int = 1
-    timeout: float = 30.0
     max_samples: int | None = None
     output_hub_name: str | None = None
     output_hub_revision: str | None = None

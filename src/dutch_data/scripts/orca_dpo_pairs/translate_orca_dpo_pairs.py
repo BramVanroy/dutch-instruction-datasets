@@ -1,7 +1,10 @@
 from typing import Annotated, Optional
 
 import typer
+from dutch_data.azure_utils import AzureQuerier, Credentials
 from dutch_data.dataset_processing import SYSTEM_TRANSLATION_PROMPT, translate_hf_dataset
+from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
+from dutch_data.text_generator import AzureTextGenerator
 from typer import Argument, Option
 
 
@@ -74,19 +77,19 @@ def translate_orcadpo_system_question(
         ),
     ] = "Dutch",
     *,
-    hub_name: Annotated[
+    output_hub_name: Annotated[
         Optional[str],
         Option(
             help="optional hub name to push the translated dataset to. Should start with an org or username,"
             " e.g. 'MyUserName/my-dataset-name'"
         ),
     ] = None,
-    hub_revision: Annotated[
+    output_hub_revision: Annotated[
         Optional[str],
         Option(help="hub branch to upload to. If not specified, will use the default branch, typically 'main'."),
     ] = None,
-    max_num_workers: Annotated[
-        int, Option("--max-num-workers", "-j", help="how many parallel workers to use to query the API")
+    max_workers: Annotated[
+        int, Option("--max-workers", "-j", help="how many parallel workers to use to query the API")
     ] = 6,
     max_tokens: Annotated[int, Option(help="max new tokens to generate with the API")] = 2048,
     timeout: Annotated[float, Option("--timeout", "-t", help="timeout in seconds for each API call")] = 30.0,
@@ -96,19 +99,22 @@ def translate_orcadpo_system_question(
 ):
     sys_msg = _TRANSLATION_PROMPT if tgt_lang.lower() == "dutch" else SYSTEM_TRANSLATION_PROMPT
 
-    return translate_hf_dataset(
+    credentials = Credentials.from_json(credentials_file, credentials_profile)
+    azure_generator = AzureTextGenerator.from_credentials(
+        credentials, max_workers=max_workers, timeout=timeout, verbose=verbose
+    )
+
+    translator = TranslateHFDataset(
+        text_generator=azure_generator,
         dataset_name="Intel/orca_dpo_pairs",
         tgt_lang=tgt_lang,
-        credentials_file=credentials_file,
-        credentials_profile=credentials_profile,
         dout=output_directory,
         columns=["system", "question"],
-        hub_name=hub_name,
-        hub_revision=hub_revision,
+        output_hub_name=output_hub_name,
+        output_hub_revision=output_hub_revision,
         merge_with_original=True,
-        max_num_workers=max_num_workers,
         system_prompt_template=sys_msg,
-        max_tokens=max_tokens,
-        timeout=timeout,
         verbose=verbose,
     )
+
+    return translator.process_dataset(max_tokens=max_tokens)

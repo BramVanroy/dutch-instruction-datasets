@@ -40,14 +40,12 @@ def mock_openai_completions_create(monkeypatch):
 
         # Mocked response based on input_text
         if input_text == "stop":
-            response = _create_completion("stop")
+            return _create_completion("stop")
         elif input_text == "content_filter":
-            response = _create_completion("content_filter")
+            return _create_completion("content_filter")
         elif input_text == "exception":
             # Mocked exception - always raise an exception
             raise Exception("Mocked exception")
-
-        return response
 
     # Patch the API call with the mock
     monkeypatch.setattr(openai.resources.chat.completions.Completions, "create", mock_create)

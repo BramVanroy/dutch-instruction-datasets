@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 
@@ -39,19 +40,29 @@ def build_translation_system_prompt(
     return prompted_text
 
 
+@dataclass
 class TranslateHFDataset(BaseHFDatasetProcessor):
     """
     Translates a HuggingFace dataset using the Azure OpenAI API.
-    TODO: update with updated TextGenerators so that we can use Azure OR HF to do all of this
     :param src_lang: source language that the texts are in (can be used in the prompt template)
     :param tgt_lang: target language to translate to (can be used in the prompt template)
-    :param system_prompt_template: prompt template. Can optionally have "{src_lang}" and "{tgt_lang}" fields that will
-    be replaced with the given source and target languages
+    :param system_prompt: system prompt or system prompt template. Can optionally have "{src_lang}" and/or "{tgt_lang}"
+     fields that will be replaced with the given source and target languages. If not given, will use a default
+     translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
+     which is useful when you want to use different prompts for translating different columns
     """
 
-    src_lang: str = ("English",)
-    tgt_lang: str = ("Dutch",)
-    system_prompt_template: str | None = (SYSTEM_TRANSLATION_PROMPT,)
+    src_lang: str = "English"
+    tgt_lang: str = "Dutch"
+    system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
+
+    def __post_init__(self):
+        if isinstance(self.system_prompt, dict):
+            if any(column not in self.system_prompt for column in self.columns):
+                raise ValueError(
+                    "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
+                    " ('columns')."
+                )
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
@@ -77,32 +88,32 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                         f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name} - {column_name}"
                     )
-
-                    messages = self._prepare_messages(ds_column, done_subset_idxs)
+                    system_prompt = self.system_prompt[column_name] if isinstance(self.system_prompt, dict) else self.system_prompt
+                    messages = self._prepare_messages(ds_column, done_subset_idxs, system_prompt=system_prompt)
 
                     if not messages:
                         continue
 
                     print(f"Number of messages to translate: {len(messages)}")
 
-                    for translation_result in tqdm(
-                        self.text_generator.query_messages(messages, return_in_order=False, **kwargs),
+                    for translation_response in tqdm(
+                        self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
                         total=len(messages),
                         desc=f"Translating {split_name} - {column_name}",
                     ):
                         result_row = {
                             "split": split_name,
                             "column": lang_colname,
-                            "idx": translation_result.job_idx,
+                            "idx": translation_response.job_idx,
                         }
 
-                        if translation_result.error is None and translation_result.result is not None:
-                            result_row[f"translation_{self.tgt_lang.lower()}"] = translation_result.result.strip()
+                        if translation_response.error is None and translation_response.result is not None:
+                            result_row[f"translation_{self.tgt_lang.lower()}"] = translation_response.result.strip()
                             translations.append(result_row)
                             self._write_row_to_fh(fhout, result_row)
                             num_done += 1
                         else:
-                            result_row["error"] = str(translation_result.error)
+                            result_row["error"] = str(translation_response.error)
                             self._write_row_to_fh(fhout_failed, result_row)
                             num_failed += 1
 
@@ -121,7 +132,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
         else:
             return None
 
-    def _prepare_messages(self, ds_column, done_subset_idxs):
+    def _prepare_messages(self, ds_column, done_subset_idxs, system_prompt: str | dict[str, str] = None):
         messages = [
             (
                 text_idx,
@@ -130,13 +141,11 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                         {
                             "role": "system",
                             "content": build_translation_system_prompt(
-                                self.src_lang, self.tgt_lang, self.system_prompt_template
+                                self.src_lang, self.tgt_lang, system_prompt
                             ),
                         },
                         {"role": "user", "content": text.strip()},
                     ]
-                    if self.system_prompt_template
-                    else [{"role": "user", "content": text.strip()}]
                 ),
             )
             for text_idx, text in enumerate(ds_column)
