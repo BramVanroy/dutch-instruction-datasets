@@ -55,6 +55,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
 
     def __post_init__(self):
+        super().__post_init__()
         if isinstance(self.system_prompt, dict):
             if any(column not in self.system_prompt for column in self.columns):
                 raise ValueError(
