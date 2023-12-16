@@ -45,7 +45,7 @@ app = typer.Typer()
 
 
 @app.command()
-def translate_orcadpo_system_question(
+def translate_ultra_feedback_instruction(
     output_directory: Annotated[str, Argument(help="output directory to save the translated dataset to")],
     hf_model_name: Annotated[
         Optional[str],
