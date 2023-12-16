@@ -53,6 +53,7 @@ dev = ["flake8", "black", "isort", "pytest"]
 [project.scripts]
 translate-orcadpo = "dutch_data.scripts.orca_dpo_pairs.translate_orca_dpo_pairs:app"
 answer-orcadpo = "dutch_data.scripts.orca_dpo_pairs.answer_orca_dpo_pairs:app"
+translate-ultrafeedback = "dutch_data.scripts.ultra_feedback.translate_ultra_feedback:app"
 interactive-query = "dutch_data.scripts.interactive_querying:app"
 
 # TOOLS
