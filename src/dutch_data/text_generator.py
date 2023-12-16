@@ -141,18 +141,16 @@ class AzureTextGenerator(TextGenerator):
     def query_messages(
         self,
         messages: list[dict[str, str]],
-        return_in_order: bool = True,
         **kwargs,
     ) -> Response:
         """
         Query the model with the given messages.
         :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
         "content" keys in the case of single querying, or a list of such lists in the case of batch querying.
-        :param return_in_order: whether to return the results in the order of the input
         :param kwargs: any keyword arguments to pass to the API
         :return: generated assistant response. If it's a single message, return a string, otherwise a list of strings
         """
-        response = self.querier.query_messages(messages, return_in_order=return_in_order, **kwargs)
+        response = self.querier.query_messages(messages, **kwargs)
 
         return response
 

@@ -88,7 +88,9 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                         f"Skipping {len(done_subset_idxs)} already translated examples in {split_name} - {column_name}"
                         f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name} - {column_name}"
                     )
-                    system_prompt = self.system_prompt[column_name] if isinstance(self.system_prompt, dict) else self.system_prompt
+                    system_prompt = (
+                        self.system_prompt[column_name] if isinstance(self.system_prompt, dict) else self.system_prompt
+                    )
                     messages = self._prepare_messages(ds_column, done_subset_idxs, system_prompt=system_prompt)
 
                     if not messages:
@@ -140,9 +142,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                     [
                         {
                             "role": "system",
-                            "content": build_translation_system_prompt(
-                                self.src_lang, self.tgt_lang, system_prompt
-                            ),
+                            "content": build_translation_system_prompt(self.src_lang, self.tgt_lang, system_prompt),
                         },
                         {"role": "user", "content": text.strip()},
                     ]
