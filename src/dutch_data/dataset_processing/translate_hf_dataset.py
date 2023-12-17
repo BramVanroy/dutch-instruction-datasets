@@ -114,7 +114,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                         )
                     ):
                         pbar.set_description(
-                            f"Translating {split_name} - {column_name}: {num_done:,} ✓ / {num_failed:,} ✗"
+                            f"{split_name} - {column_name} ({num_done:,}✓ / {num_failed:,}✗)"
                         )
 
                         result_row = {
