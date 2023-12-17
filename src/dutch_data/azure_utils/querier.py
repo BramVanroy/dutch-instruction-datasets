@@ -64,24 +64,33 @@ def _add_job_idx_to_messages(
     return list_of_messages
 
 
+class AzureOpenAIDeployment(AzureOpenAI):
+    """
+    Extends the AzureOpenAI class with and additional parameter for the Azure deployment.
+    """
+    def __init__(self, *, azure_deployment: str, **kwargs):
+        self.azure_deployment = azure_deployment
+        super().__init__(**kwargs)
+
+
 @dataclass
 class AzureQuerier:
     """
     Class for querying the Azure OpenAI API.
     """
 
-    clients: AzureOpenAI | list[AzureOpenAI]
+    clients: AzureOpenAIDeployment | list[AzureOpenAIDeployment]
     max_workers: int = 6
     verbose: bool = False
-    cyclical_clients: Iterator[AzureOpenAI] | None = field(init=False)
+    cyclical_clients: Iterator[AzureOpenAIDeployment] | None = field(init=False)
 
     def __post_init__(self):
-        if isinstance(self.clients, AzureOpenAI):
+        if isinstance(self.clients, AzureOpenAIDeployment):
             self.clients = [self.clients]
         self.cyclical_clients = cycle(self.clients)
 
     @property
-    def active_client(self) -> AzureOpenAI:
+    def active_client(self) -> AzureOpenAIDeployment:
         return next(self.cyclical_clients)
 
     def __hash__(self):
@@ -135,7 +144,7 @@ class AzureQuerier:
                 stop=stop_after_attempt(client.max_retries),
             ):
                 with attempt:
-                    completion = client.chat.completions.create(messages=messages, **kwargs)
+                    completion = client.chat.completions.create(model=client.azure_deployment, messages=messages, **kwargs)
         except BadRequestError as exc:
             response["error"] = ContentFilterException(
                 f"Bad request error. Your input was likely malformed or contained inappropriate requests."
@@ -259,7 +268,7 @@ class AzureQuerier:
         if timeout < 1:
             raise ValueError("timeout must be at least 1")
 
-        client = AzureOpenAI(
+        client = AzureOpenAIDeployment(
             **asdict(credentials),
             max_retries=max_retries,
             timeout=timeout,
@@ -310,7 +319,7 @@ class AzureQuerier:
             )
 
         clients = [
-            AzureOpenAI(
+            AzureOpenAIDeployment(
                 **credentials[profile],
                 max_retries=max_retries,
                 timeout=timeout,
