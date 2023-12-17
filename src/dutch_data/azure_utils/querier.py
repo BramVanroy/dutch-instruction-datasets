@@ -2,7 +2,10 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
-from typing import Generator
+from itertools import cycle
+from os import PathLike
+from pathlib import Path
+from typing import Generator, Iterator
 
 from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.utils import Response, dict_to_tuple
@@ -256,3 +259,82 @@ class AzureQuerier:
         return cls(
             **asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
         )
+
+
+@dataclass
+class CyclicalAzureQuerier:
+    """
+    Class for querying the Azure OpenAI API with multiple queriers in a cyclical fashion. The intention
+    is to avoid overlading specific endpoints. This can be useful if you have endpoints in different regions
+    and want to avoid hitting the same endpoint too often.
+    Using this class is as simple as using a single querier through its query_messages and query_list_of_messages
+    methods.
+    """
+
+    queriers: list[AzureQuerier]
+    cycling_queriers: Iterator | None = field(default=None, init=False)
+
+    def __post_init__(self):
+        if len(self.queriers) < 1:
+            raise ValueError("At least one querier must be given")
+
+        self.cycling_queriers = cycle(self.queriers)
+
+    @property
+    def active_querier(self):
+        return next(self.cycling_queriers)
+
+    def query_messages(self, messages: list[ChatCompletionMessageParam], **kwargs) -> Response:
+        """
+        Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
+        :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
+        :param kwargs: any keyword arguments to pass to the API
+        :return: Response object with results and/or potential errors
+        """
+        return self.active_querier.query_messages(messages, **kwargs)
+
+    def query_list_of_messages(
+        self,
+        list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
+        return_in_order: bool = True,
+        **kwargs,
+    ) -> Generator[Response, None, None]:
+        """
+        Query the Azure OpenAI API with a list of messages.
+        :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
+        but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
+        :param return_in_order: whether to return the results in the order of the input
+        :param kwargs: any keyword arguments to pass to the API
+        :return: a generator of Response objects
+        """
+        return self.active_querier.query_list_of_messages(list_of_messages, return_in_order=return_in_order, **kwargs)
+
+    @classmethod
+    def from_json(cls, credentials_file: str | PathLike, credentials_profiles: list[str] | None = None, **kwargs):
+        """
+        Load credentials from a JSON file to initialize a CyclicalQuerier from multiple profiles
+        :param credentials_file: JSON file containing credentials
+        :param credentials_profiles: which credential profiles (keys) to use from the credentials file. If None, will
+        use all profiles
+        :param kwargs: any keyword arguments to pass to the AzureQuerier initialization
+        """
+        pfcredentials_file = Path(credentials_file).resolve()
+
+        if not pfcredentials_file.exists():
+            raise FileNotFoundError(f"Credentials file {pfcredentials_file} does not exist.")
+
+        credentials = json.loads(pfcredentials_file.read_text(encoding="utf-8"))
+        credentials_profiles = credentials_profiles or list(credentials.keys())
+
+        if any(profile not in credentials for profile in credentials_profiles):
+            raise ValueError(
+                f"Not all profiles ({credentials_profiles}) are present in the credentials file."
+                f" Available profiles: {list(credentials.keys())}"
+            )
+
+        queriers = [
+            AzureQuerier.from_credentials(Credentials(**credentials[profile]), **kwargs)
+            for profile in credentials_profiles
+        ]
+
+        return cls(queriers)

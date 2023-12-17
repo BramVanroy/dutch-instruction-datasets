@@ -4,6 +4,7 @@ import openai
 import pytest
 import transformers
 from dutch_data.azure_utils import AzureQuerier, Credentials
+from dutch_data.azure_utils.querier import CyclicalAzureQuerier
 from dutch_data.text_generator import AzureTextGenerator
 from openai.types.chat.chat_completion import ChatCompletion, Choice
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
@@ -51,12 +52,15 @@ def mock_openai_completions_create(monkeypatch):
     monkeypatch.setattr(openai.resources.chat.completions.Completions, "create", mock_create)
 
 
-@pytest.fixture()
-def azure_querier():
-    # Assumes that the credentials file is in the root directory of the project
+@pytest.fixture(params=["regular", "cyclical"])
+def azure_querier(request):
     credentials_file = Path(__file__).parent / "dummy-credentials.json"
-    credentials = Credentials.from_json(credentials_file)
-    return AzureQuerier.from_credentials(credentials, timeout=1, max_retries=1)
+
+    if request.param == "regular":
+        credentials = Credentials.from_json(credentials_file)
+        return AzureQuerier.from_credentials(credentials, timeout=1, max_retries=1)
+    elif request.param == "cyclical":
+        return CyclicalAzureQuerier.from_json(credentials_file, timeout=1, max_retries=1)
 
 
 @pytest.fixture()
