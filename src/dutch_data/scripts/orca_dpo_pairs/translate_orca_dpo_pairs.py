@@ -78,8 +78,8 @@ def translate_orcadpo_system_question(
         ),
     ] = None,
     credentials_file: Annotated[Optional[str], Option(help="JSON file containing credentials")] = None,
-    credentials_profile: Annotated[
-        Optional[str], Option(help="which credential profile (key) to use from the credentials file")
+    credentials_profiles: Annotated[
+        Optional[list[str]], Option(help="which credential profile(s) (key) to use from the credentials file")
     ] = None,
     tgt_lang: Annotated[
         str,
@@ -123,17 +123,15 @@ def translate_orcadpo_system_question(
     if hf_model_name:
         text_generator = HFTextGenerator(hf_model_name)
     else:
-        if isinstance(credentials_profile, str) or (
-            isinstance(credentials_profile, list) and len(credentials_profile) == 1
-        ):
-            credentials = Credentials.from_json(credentials_file, credentials_profile)
+        if len(credentials_profiles) == 1:
+            credentials = Credentials.from_json(credentials_file, credentials_profiles[0])
             text_generator = AzureTextGenerator.from_credentials(
                 credentials, max_workers=max_workers, timeout=timeout, max_retries=max_retries, verbose=verbose
             )
         else:
             cyclical_querier = CyclicalAzureQuerier.from_json(
                 credentials_file,
-                credentials_profile,
+                credentials_profiles,
                 max_workers=max_workers,
                 timeout=timeout,
                 max_retries=max_retries,
