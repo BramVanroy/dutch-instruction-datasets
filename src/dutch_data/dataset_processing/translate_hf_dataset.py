@@ -107,11 +107,16 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
                     print(f"Number of messages to translate: {len(messages)}")
 
-                    for translation_response in tqdm(
-                        self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
-                        total=len(messages),
-                        desc=f"Translating {split_name} - {column_name}",
+                    for translation_response in (
+                        pbar := tqdm(
+                            self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
+                            total=len(messages),
+                        )
                     ):
+                        pbar.set_description(
+                            f"Translating {split_name} - {column_name}: {num_done:,} ✓ / {num_failed:,} ✗"
+                        )
+
                         result_row = {
                             "split": split_name,
                             "column": lang_colname,
