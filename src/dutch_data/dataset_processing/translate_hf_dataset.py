@@ -113,9 +113,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                             total=len(messages),
                         )
                     ):
-                        pbar.set_description(
-                            f"{split_name} - {column_name} ({num_done:,}✓ / {num_failed:,}✗)"
-                        )
+                        pbar.set_description(f"{split_name} - {column_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
                         result_row = {
                             "split": split_name,
