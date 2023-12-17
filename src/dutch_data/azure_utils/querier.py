@@ -115,7 +115,9 @@ class AzureQuerier:
         # Transform messages back into required format.
         job_idx = messages[0]
         messages = [dict(message) for message in messages[1]]
-
+        user_only_messages = [
+            {"role": "user", "content": message["content"]} for message in messages if message["role"] == "user"
+        ]
         response = {
             "job_idx": job_idx,
             "messages": messages,
@@ -141,7 +143,7 @@ class AzureQuerier:
             )
         except RetryError as retry_error:
             if retry_error.last_attempt.failed:
-                response["error"] = retry_error.last_attempt.result()
+                response["error"] = retry_error.last_attempt.exception()
             else:
                 response["error"] = retry_error
         except Exception as exc:
@@ -154,8 +156,8 @@ class AzureQuerier:
             if choice.finish_reason == "content_filter":
                 if self.verbose:
                     print(
-                        f"Content filter triggered for the following messages (so no response received):"
-                        f" {messages}",
+                        f"Content filter triggered for the following user messages (system message hidden)"
+                        f" (so no response received):\n{user_only_messages}",
                         file=sys.stderr,
                         flush=True,
                     )

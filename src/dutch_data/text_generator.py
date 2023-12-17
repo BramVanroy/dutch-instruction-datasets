@@ -67,22 +67,29 @@ class HFTextGenerator(TextGenerator):
         :param kwargs: additional kwargs to pass to the pipeline call
         :return: generated assistant response
         """
-        conversation = self.pipe(
-            messages,
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            **kwargs,
-        )
+        response = {
+            "job_idx": 0,
+            "messages": messages,
+            "result": None,
+            "text_response": None,
+            "error": None,
+        }
+        try:
+            conversation = self.pipe(
+                messages,
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                **kwargs,
+            )
+            response["result"] = conversation
+            response["text_response"] = conversation.messages[-1]["content"]
+        except Exception as exc:
+            response["error"] = exc
 
-        response = Response(
-            job_idx=0,
-            messages=messages,
-            result=conversation,
-            text_response=conversation.messages[-1]["content"],
-        )
+        response = Response(**response)
 
         return response
 
