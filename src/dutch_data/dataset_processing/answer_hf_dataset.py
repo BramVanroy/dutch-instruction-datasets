@@ -92,12 +92,6 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                         self._write_row_to_fh(fhout_failed, result_row)
                         num_failed += 1
 
-                    if self.verbose:
-                        print(
-                            f"Current progress in {split_name}: {num_done:,} done," f" {num_failed:,} failed",
-                            flush=True,
-                        )
-
         if answers:
             output_datasets = self._postprocess_dataset(answers, orig_dataset, self.response_column)
             return output_datasets

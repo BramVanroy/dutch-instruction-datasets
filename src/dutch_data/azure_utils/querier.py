@@ -68,6 +68,7 @@ class AzureOpenAIDeployment(AzureOpenAI):
     """
     Extends the AzureOpenAI class with and additional parameter for the Azure deployment.
     """
+
     def __init__(self, *, azure_deployment: str, **kwargs):
         self.azure_deployment = azure_deployment
         super().__init__(**kwargs)
@@ -144,7 +145,9 @@ class AzureQuerier:
                 stop=stop_after_attempt(client.max_retries),
             ):
                 with attempt:
-                    completion = client.chat.completions.create(model=client.azure_deployment, messages=messages, **kwargs)
+                    completion = client.chat.completions.create(
+                        model=client.azure_deployment, messages=messages, **kwargs
+                    )
         except BadRequestError as exc:
             response["error"] = ContentFilterException(
                 f"Bad request error. Your input was likely malformed or contained inappropriate requests."

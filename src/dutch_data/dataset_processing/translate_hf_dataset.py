@@ -133,13 +133,6 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                             self._write_row_to_fh(fhout_failed, result_row)
                             num_failed += 1
 
-                        if self.verbose:
-                            print(
-                                f"Current progress in {split_name} - {column_name}: {num_done:,} done,"
-                                f" {num_failed:,} failed",
-                                flush=True,
-                            )
-
         if translations:
             output_datasets = self._postprocess_dataset(
                 translations, orig_dataset, f"translation_{self.tgt_lang.lower()}"
