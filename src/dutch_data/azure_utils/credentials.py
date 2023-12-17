@@ -12,8 +12,8 @@ class Credentials:
 
     api_key: str
     api_version: str
-    deployment_name: str
-    endpoint: str
+    azure_deployment: str
+    azure_endpoint: str
 
     @classmethod
     def from_json(cls, credentials_file: str | PathLike, credentials_profile: str | None = None):

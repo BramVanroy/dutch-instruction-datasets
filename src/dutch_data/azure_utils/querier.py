@@ -70,33 +70,29 @@ class AzureQuerier:
     Class for querying the Azure OpenAI API.
     """
 
-    api_key: str
-    api_version: str
-    deployment_name: str
-    endpoint: str
-    max_retries: int = 3
-    timeout: float = 30.0
+    clients: AzureOpenAI | list[AzureOpenAI]
     max_workers: int = 6
     verbose: bool = False
-    client: AzureOpenAI | None = field(default=None, init=False)
+    cyclical_clients: Iterator[AzureOpenAI] | None = field(init=False)
 
     def __post_init__(self):
-        if self.max_retries < 1:
-            raise ValueError("max_retries must be at least 1")
+        if isinstance(self.clients, AzureOpenAI):
+            self.clients = [self.clients]
+        self.cyclical_clients = cycle(self.clients)
 
-        if self.timeout < 1:
-            raise ValueError("timeout must be at least 1")
-
-        self.client = AzureOpenAI(
-            api_version=self.api_version,
-            azure_endpoint=self.endpoint,
-            api_key=self.api_key,
-            max_retries=self.max_retries,
-            timeout=self.timeout,
-        )
+    @property
+    def active_client(self) -> AzureOpenAI:
+        return next(self.cyclical_clients)
 
     def __hash__(self):
-        return hash((self.api_key, self.api_version, self.deployment_name, self.endpoint))
+        return hash(
+            tuple(
+                [
+                    (client.api_key, client.api_version, client.azure_deployment, client.azure_endpoint)
+                    for client in self.clients
+                ]
+            )
+        )
 
     def _query_api(self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], **kwargs) -> Response:
         """
@@ -115,6 +111,9 @@ class AzureQuerier:
                 f" to use query_list_of_messages instead, which works on 'lists' of messages instead of singletons."
             )
 
+        # Get the active client (changes on every call to 'self.active_client') so we assign it to a variable to avoid
+        # it changing during the execution of this function.
+        client = self.active_client
         # Transform messages back into required format.
         job_idx = messages[0]
         messages = [dict(message) for message in messages[1]]
@@ -132,13 +131,11 @@ class AzureQuerier:
         try:
             for attempt in Retrying(
                 retry=retry_if_not_exception_type(BadRequestError),
-                wait=wait_random_exponential(min=1, max=self.timeout),
-                stop=stop_after_attempt(self.max_retries),
+                wait=wait_random_exponential(min=1, max=client.timeout),
+                stop=stop_after_attempt(client.max_retries),
             ):
                 with attempt:
-                    completion = self.client.chat.completions.create(
-                        model=self.deployment_name, messages=messages, **kwargs
-                    )
+                    completion = client.chat.completions.create(messages=messages, **kwargs)
         except BadRequestError as exc:
             response["error"] = ContentFilterException(
                 f"Bad request error. Your input was likely malformed or contained inappropriate requests."
@@ -256,71 +253,31 @@ class AzureQuerier:
         :param verbose: whether to print more information of the API responses
         :return: Initialized AzureQuerier object
         """
-        return cls(
-            **asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
+        if max_retries < 1:
+            raise ValueError("max_retries must be at least 1")
+
+        if timeout < 1:
+            raise ValueError("timeout must be at least 1")
+
+        client = AzureOpenAI(
+            **asdict(credentials),
+            max_retries=max_retries,
+            timeout=timeout,
         )
-
-
-@dataclass
-class CyclicalAzureQuerier:
-    """
-    Class for querying the Azure OpenAI API with multiple queriers in a cyclical fashion. The intention
-    is to avoid overlading specific endpoints. This can be useful if you have endpoints in different regions
-    and want to avoid hitting the same endpoint too often.
-    Using this class is as simple as using a single querier through its query_messages and query_list_of_messages
-    methods.
-    """
-
-    queriers: list[AzureQuerier]
-    cycling_queriers: Iterator | None = field(default=None, init=False)
-
-    def __post_init__(self):
-        if len(self.queriers) < 1:
-            raise ValueError("At least one querier must be given")
-
-        self.cycling_queriers = cycle(self.queriers)
-
-    @property
-    def active_querier(self):
-        return next(self.cycling_queriers)
-
-    def query_messages(self, messages: list[ChatCompletionMessageParam], **kwargs) -> Response:
-        """
-        Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
-        :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
-        :param kwargs: any keyword arguments to pass to the API
-        :return: Response object with results and/or potential errors
-        """
-        return self.active_querier.query_messages(messages, **kwargs)
-
-    def query_list_of_messages(
-        self,
-        list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
-        return_in_order: bool = True,
-        **kwargs,
-    ) -> Generator[Response, None, None]:
-        """
-        Query the Azure OpenAI API with a list of messages.
-        :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
-        but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
-        :param return_in_order: whether to return the results in the order of the input
-        :param kwargs: any keyword arguments to pass to the API
-        :return: a generator of Response objects
-        """
-        return self.active_querier.query_list_of_messages(list_of_messages, return_in_order=return_in_order, **kwargs)
+        return cls(client, max_workers=max_workers, verbose=verbose)
 
     @classmethod
     def from_json(
         cls,
         credentials_file: str | PathLike,
-        credentials_profiles: list[str] | None = None,
+        credentials_profiles: list[str] | str | None = None,
         max_retries: int = 3,
         timeout: float = 30.0,
         max_workers: int = 6,
         verbose: bool = False,
     ):
         """
-        Load credentials from a JSON file to initialize a CyclicalQuerier from multiple profiles
+        Load credentials from a JSON file to initialize a Querier from multiple profiles
         :param credentials_file: JSON file containing credentials
         :param credentials_profiles: which credential profiles (keys) to use from the credentials file. If None, will
         use all profiles
@@ -329,6 +286,12 @@ class CyclicalAzureQuerier:
         :param max_workers: maximum number of workers for multi-threaded querying
         :param verbose: whether to print more information of the API responses
         """
+        if max_retries < 1:
+            raise ValueError("max_retries must be at least 1")
+
+        if timeout < 1:
+            raise ValueError("timeout must be at least 1")
+
         pfcredentials_file = Path(credentials_file).resolve()
 
         if not pfcredentials_file.exists():
@@ -337,21 +300,22 @@ class CyclicalAzureQuerier:
         credentials = json.loads(pfcredentials_file.read_text(encoding="utf-8"))
         credentials_profiles = credentials_profiles or list(credentials.keys())
 
+        if isinstance(credentials_profiles, str):
+            credentials_profiles = [credentials_profiles]
+
         if any(profile not in credentials for profile in credentials_profiles):
             raise ValueError(
                 f"Not all profiles ({credentials_profiles}) are present in the credentials file."
                 f" Available profiles: {list(credentials.keys())}"
             )
 
-        queriers = [
-            AzureQuerier.from_credentials(
-                Credentials(**credentials[profile]),
-                max_workers=max_workers,
-                timeout=timeout,
+        clients = [
+            AzureOpenAI(
+                **credentials[profile],
                 max_retries=max_retries,
-                verbose=verbose,
+                timeout=timeout,
             )
             for profile in credentials_profiles
         ]
 
-        return cls(queriers)
+        return cls(clients, max_workers=max_workers, verbose=verbose)

@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from os import PathLike
 from typing import Generator, Literal
 
 import torch
 from dutch_data.azure_utils import AzureQuerier, Credentials
-from dutch_data.azure_utils.querier import CyclicalAzureQuerier
 from dutch_data.utils import Response
 from transformers import Conversation, Pipeline, pipeline
 
@@ -144,7 +144,7 @@ class HFTextGenerator(TextGenerator):
 
 @dataclass
 class AzureTextGenerator(TextGenerator):
-    querier: AzureQuerier | CyclicalAzureQuerier
+    querier: AzureQuerier
 
     def query_messages(
         self,
@@ -196,7 +196,37 @@ class AzureTextGenerator(TextGenerator):
         :param verbose: whether to print more information of the API responses
         :return: Initialized AzureQuerier object
         """
-        querier = AzureQuerier(
-            **asdict(credentials), max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
+        querier = AzureQuerier.from_credentials(
+            credentials, max_retries=max_retries, timeout=timeout, max_workers=max_workers, verbose=verbose
+        )
+        return cls(querier)
+
+    @classmethod
+    def from_json(
+        cls,
+        credentials_file: str | PathLike,
+        credentials_profiles: list[str] | str | None = None,
+        max_retries: int = 3,
+        timeout: float = 30.0,
+        max_workers: int = 6,
+        verbose: bool = False,
+    ):
+        """
+        Initialize TextGenerator with QzureQuerier(s) from JSON file.
+        :param credentials_file: JSON file containing credentials
+        :param credentials_profiles: which credential profile(s) (keys) to use from the credentials file. If None, will
+        use all profiles
+        :param max_retries: maximum number of retries for API calls
+        :param timeout: timeout for API calls
+        :param max_workers: maximum number of workers for multi-threaded querying
+        :param verbose: whether to print more information of the API responses
+        """
+        querier = AzureQuerier.from_json(
+            credentials_file,
+            credentials_profiles,
+            max_retries=max_retries,
+            timeout=timeout,
+            max_workers=max_workers,
+            verbose=verbose,
         )
         return cls(querier)

@@ -1,8 +1,6 @@
 from typing import Annotated, Optional
 
 import typer
-from dutch_data.azure_utils import Credentials
-from dutch_data.azure_utils.querier import CyclicalAzureQuerier
 from dutch_data.dataset_processing import SYSTEM_TRANSLATION_PROMPT
 from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
@@ -100,21 +98,14 @@ def translate_ultra_feedback_instruction(
     if hf_model_name:
         text_generator = HFTextGenerator(hf_model_name)
     else:
-        if len(credentials_profiles) == 1:
-            credentials = Credentials.from_json(credentials_file, credentials_profiles[0])
-            text_generator = AzureTextGenerator.from_credentials(
-                credentials, max_workers=max_workers, timeout=timeout, max_retries=max_retries, verbose=verbose
-            )
-        else:
-            cyclical_querier = CyclicalAzureQuerier.from_json(
-                credentials_file,
-                credentials_profiles,
-                max_workers=max_workers,
-                timeout=timeout,
-                max_retries=max_retries,
-                verbose=verbose,
-            )
-            text_generator = AzureTextGenerator(cyclical_querier)
+        text_generator = AzureTextGenerator.from_json(
+            credentials_file,
+            credentials_profiles,
+            max_workers=max_workers,
+            timeout=timeout,
+            max_retries=max_retries,
+            verbose=verbose,
+        )
 
     translator = TranslateHFDataset(
         text_generator=text_generator,
