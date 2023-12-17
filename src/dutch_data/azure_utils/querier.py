@@ -77,7 +77,8 @@ class AzureOpenAIDeployment(AzureOpenAI):
 @dataclass
 class AzureQuerier:
     """
-    Class for querying the Azure OpenAI API.
+    Class for querying the Azure OpenAI API. If a list of clients is given, every new request will be executed
+    with the next item in the list of clients.
     """
 
     clients: AzureOpenAIDeployment | list[AzureOpenAIDeployment]

@@ -42,7 +42,8 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     Translates a HuggingFace dataset using the Azure OpenAI API.
     :param src_lang: source language that the texts are in (can be used in the prompt template)
     :param tgt_lang: target language to translate to (can be used in the prompt template)
-    :param columns: optional list of column names to translate. Other columns will be dropped
+    :param columns: optional list of column names to translate. Other columns will be dropped. If not given,
+    all columns will be translated
     :param system_prompt: system prompt or system prompt template. Can optionally have "{src_lang}" and/or "{tgt_lang}"
      fields that will be replaced with the given source and target languages. If not given, will use a default
      translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
@@ -53,15 +54,6 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     tgt_lang: str = "Dutch"
     columns: list[str] | None = None
     system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
-
-    def __post_init__(self):
-        super().__post_init__()
-        if isinstance(self.system_prompt, dict):
-            if any(column not in self.system_prompt for column in self.columns):
-                raise ValueError(
-                    "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
-                    " ('columns')."
-                )
 
     def _load_dataset(self) -> DatasetDict:
         """
@@ -75,6 +67,13 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
+
+        if any(column not in self.system_prompt for column in orig_dataset.column_names):
+            raise ValueError(
+                "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
+                " ('columns')."
+            )
+
         pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
 
         # Translate
