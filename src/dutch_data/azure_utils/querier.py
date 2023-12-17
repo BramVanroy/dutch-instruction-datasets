@@ -310,13 +310,24 @@ class CyclicalAzureQuerier:
         return self.active_querier.query_list_of_messages(list_of_messages, return_in_order=return_in_order, **kwargs)
 
     @classmethod
-    def from_json(cls, credentials_file: str | PathLike, credentials_profiles: list[str] | None = None, **kwargs):
+    def from_json(
+        cls,
+        credentials_file: str | PathLike,
+        credentials_profiles: list[str] | None = None,
+        max_retries: int = 3,
+        timeout: float = 30.0,
+        max_workers: int = 6,
+        verbose: bool = False,
+    ):
         """
         Load credentials from a JSON file to initialize a CyclicalQuerier from multiple profiles
         :param credentials_file: JSON file containing credentials
         :param credentials_profiles: which credential profiles (keys) to use from the credentials file. If None, will
         use all profiles
-        :param kwargs: any keyword arguments to pass to the AzureQuerier initialization
+        :param max_retries: maximum number of retries for API calls
+        :param timeout: timeout for API calls
+        :param max_workers: maximum number of workers for multi-threaded querying
+        :param verbose: whether to print more information of the API responses
         """
         pfcredentials_file = Path(credentials_file).resolve()
 
@@ -333,7 +344,13 @@ class CyclicalAzureQuerier:
             )
 
         queriers = [
-            AzureQuerier.from_credentials(Credentials(**credentials[profile]), **kwargs)
+            AzureQuerier.from_credentials(
+                Credentials(**credentials[profile]),
+                max_workers=max_workers,
+                timeout=timeout,
+                max_retries=max_retries,
+                verbose=verbose,
+            )
             for profile in credentials_profiles
         ]
 

@@ -4,6 +4,7 @@ from typing import Generator, Literal
 
 import torch
 from dutch_data.azure_utils import AzureQuerier, Credentials
+from dutch_data.azure_utils.querier import CyclicalAzureQuerier
 from dutch_data.utils import Response
 from transformers import Conversation, Pipeline, pipeline
 
@@ -143,7 +144,7 @@ class HFTextGenerator(TextGenerator):
 
 @dataclass
 class AzureTextGenerator(TextGenerator):
-    querier: AzureQuerier
+    querier: AzureQuerier | CyclicalAzureQuerier
 
     def query_messages(
         self,
