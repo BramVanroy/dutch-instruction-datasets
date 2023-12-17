@@ -15,15 +15,11 @@ def translate(
     output_directory: Annotated[str, Argument(help="output directory to save the translated dataset to")],
     config_name: Annotated[
         Optional[str],
-        Option(
-            help="optional config name for the dataset"
-        ),
+        Option(help="optional config name for the dataset"),
     ] = None,
     split: Annotated[
         Optional[str],
-        Option(
-            help="optional split for the dataset. If not given, all splits will be translated"
-        ),
+        Option(help="optional split for the dataset. If not given, all splits will be translated"),
     ] = None,
     hf_model_name: Annotated[
         Optional[str],
@@ -51,7 +47,7 @@ def translate(
         Optional[str],
         Option(
             help="optional system prompt to use for the translation to tell the model it has to translate."
-                 " If not given, will use a default prompt"
+            " If not given, will use a default prompt"
         ),
     ] = None,
     output_hub_name: Annotated[

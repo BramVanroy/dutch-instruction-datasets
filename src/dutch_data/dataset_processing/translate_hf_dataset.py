@@ -68,7 +68,9 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
 
-        if any(column not in self.system_prompt for column in orig_dataset.column_names):
+        if isinstance(self.system_prompt, dict) and any(
+            column not in self.system_prompt for column in orig_dataset.column_names
+        ):
             raise ValueError(
                 "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
                 " ('columns')."
