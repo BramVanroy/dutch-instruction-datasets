@@ -138,18 +138,20 @@ class HFTextGenerator(TextGenerator):
             job_idxs = list(range(len(list_of_messages)))
 
         generator_of_msgs = (Conversation(msgs) for msgs in list_of_messages)
-        for item_idx, (job_idx, conversation) in enumerate(zip(
-            job_idxs,
-            self.pipe(
-                generator_of_msgs,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                batch_size=batch_size,
-                **kwargs,
-            ))
+        for item_idx, (job_idx, conversation) in enumerate(
+            zip(
+                job_idxs,
+                self.pipe(
+                    generator_of_msgs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=do_sample,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    batch_size=batch_size,
+                    **kwargs,
+                ),
+            )
         ):
             messages = list_of_messages[item_idx]
             yield Response(

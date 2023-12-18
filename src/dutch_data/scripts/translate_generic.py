@@ -88,9 +88,7 @@ def translate(
     ] = False,
     device_map: Annotated[
         Optional[str],
-        Option(
-            help="(hf) device map to use for the model. Can be 'auto' or a device ID (e.g. 'cuda:0')"
-        ),
+        Option(help="(hf) device map to use for the model. Can be 'auto' or a device ID (e.g. 'cuda:0')"),
     ] = None,
     load_in_8bit: Annotated[
         bool, Option(help="(hf) whether to load the model in 8bit precision to save memory")
@@ -100,10 +98,11 @@ def translate(
     ] = False,
     torch_dtype: Annotated[
         Optional[str],
-        Option(
-            help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"
-        ),
+        Option(help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
     ] = None,
+    batch_size: Annotated[
+        int, Option(help="(hf) batch size for inference. Note that higher values not necessarily increase speed!")
+    ] = 1,
 ):
     """
     Translate any dataset on the Hugging Face hub to a given language (default Dutch), optionally filtered by
@@ -150,6 +149,6 @@ def translate(
     )
 
     if hf_model_name:
-        return translator.process_dataset(max_new_tokens=max_tokens)
+        return translator.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
     else:
         return translator.process_dataset(max_tokens=max_tokens)

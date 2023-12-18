@@ -71,9 +71,7 @@ def answer(
     ] = False,
     device_map: Annotated[
         Optional[str],
-        Option(
-            help="(hf) device map to use for the model. Can be 'auto' or a device ID (e.g. 'cuda:0')"
-        ),
+        Option(help="(hf) device map to use for the model. Can be 'auto' or a device ID (e.g. 'cuda:0')"),
     ] = None,
     load_in_8bit: Annotated[
         bool, Option(help="(hf) whether to load the model in 8bit precision to save memory")
@@ -83,10 +81,11 @@ def answer(
     ] = False,
     torch_dtype: Annotated[
         Optional[str],
-        Option(
-            help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"
-        ),
+        Option(help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
     ] = None,
+    batch_size: Annotated[
+        int, Option(help="(hf) batch size for inference. Note that higher values not necessarily increase speed!")
+    ] = 1,
 ):
     """
     Answer a column of any dataset on the Hugging Face hub, optionally filtered by split and columns. Depending on the
@@ -131,6 +130,6 @@ def answer(
     )
 
     if hf_model_name:
-        return answerer.process_dataset(max_new_tokens=max_tokens)
+        return answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
     else:
         return answerer.process_dataset(max_tokens=max_tokens)
