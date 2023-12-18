@@ -51,7 +51,7 @@ class HFTextGenerator(TextGenerator):
 
     def query_messages(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
         max_new_tokens: int = 128,
         do_sample: bool = True,
         temperature: float = 1.0,
@@ -71,8 +71,15 @@ class HFTextGenerator(TextGenerator):
         :param kwargs: additional kwargs to pass to the pipeline call
         :return: generated assistant response
         """
+
+        if isinstance(messages[0], int):
+            job_idx = messages[0]
+            messages = messages[1]
+        else:
+            job_idx = 0
+
         response = {
-            "job_idx": 0,
+            "job_idx": job_idx,
             "messages": messages,
             "result": None,
             "text_response": None,
@@ -99,7 +106,7 @@ class HFTextGenerator(TextGenerator):
 
     def batch_query_messages(
         self,
-        list_of_messages: list[list[dict[str, str]]],
+        list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
         max_new_tokens: int = 128,
         do_sample: bool = True,
         temperature: float = 1.0,
@@ -123,8 +130,16 @@ class HFTextGenerator(TextGenerator):
         """
         # Interestingly, the pipeline will only yield a generator if the input was a generator or a Dataset
         # and they HAVE to be a Conversation
+
+        if isinstance(list_of_messages[0][0], int):
+            job_idxs = [item[0] for item in list_of_messages]
+            list_of_messages = [item[1] for item in list_of_messages]
+        else:
+            job_idxs = list(range(len(list_of_messages)))
+
         generator_of_msgs = (Conversation(msgs) for msgs in list_of_messages)
-        for item_idx, conversation in enumerate(
+        for item_idx, (job_idx, conversation) in enumerate(zip(
+            job_idxs,
             self.pipe(
                 generator_of_msgs,
                 max_new_tokens=max_new_tokens,
@@ -134,11 +149,11 @@ class HFTextGenerator(TextGenerator):
                 top_p=top_p,
                 batch_size=batch_size,
                 **kwargs,
-            )
+            ))
         ):
             messages = list_of_messages[item_idx]
             yield Response(
-                job_idx=item_idx,
+                job_idx=job_idx,
                 messages=messages,
                 result=conversation,
                 text_response=conversation.messages[-1]["content"],
