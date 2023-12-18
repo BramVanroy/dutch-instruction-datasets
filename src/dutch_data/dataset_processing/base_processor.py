@@ -16,13 +16,13 @@ class BaseHFDatasetProcessor(ABC):
     :param dataset_name: dataset name compatible with HuggingFace datasets
     :param text_generator: text generator to use for querying. This can be a HuggingFace pipeline, an Azure pipeline,
     or any other TextGenerator subclass that implements the `query_messages` method
-    :param dout: output directory to save the translated dataset to. Temporary progress will also
-    be saved here
+    :param dout: output directory to save the translated dataset to. Temporary progress will also be saved here
     :param config_name: optional config name for the dataset
     :param split: optional split for the dataset. If not given, all splits will be translated
+    :param revision: optional revision for the dataset. If not given, will load the main revision
     :param max_samples: maximum number of samples to translate. Useful for testing
-    :param output_hub_name: optional hub name to push the translated dataset to. Should start with an org or username, e.g.
-    "MyUserName/my-dataset-name"
+    :param output_hub_name: optional hub name to push the translated dataset to. Should start with an org or username,
+     e.g. "MyUserName/my-dataset-name"
     :param output_hub_revision: optional hub branch to upload to. If not specified, will use the default branch,
     typically 'main' be replaced with the given source and target languages
     :param merge_with_original: whether to merge the translated dataset with the original dataset
@@ -34,6 +34,7 @@ class BaseHFDatasetProcessor(ABC):
     dout: PathLike | str
     config_name: str | None = None
     split: str | None = None
+    revision: str | None = None
     max_samples: int | None = None
     output_hub_name: str | None = None
     output_hub_revision: str | None = None
@@ -99,7 +100,7 @@ class BaseHFDatasetProcessor(ABC):
         Load the dataset from Hugging Face datasets. Optionally restricted to a specific split.
         :return: a loaded DatasetDict
         """
-        orig_dataset: DatasetDict = load_dataset(self.dataset_name, name=self.config_name)
+        orig_dataset: DatasetDict = load_dataset(self.dataset_name, name=self.config_name, revision=self.revision)
         if self.split is not None:
             orig_dataset = DatasetDict({"train": orig_dataset[self.split]})
         return orig_dataset

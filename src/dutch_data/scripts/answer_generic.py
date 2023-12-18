@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 
 import typer
-from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
+from dutch_data.dataset_processing import AnswerHFDataset
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
 from typer import Argument, Option
 
@@ -10,16 +10,20 @@ app = typer.Typer()
 
 
 @app.command()
-def translate(
+def answer(
     dataset_name: Annotated[str, Argument(help="dataset name compatible with HuggingFace datasets")],
-    output_directory: Annotated[str, Argument(help="output directory to save the translated dataset to")],
+    output_directory: Annotated[str, Argument(help="output directory to save the answered dataset to")],
+    instruction_column: Annotated[
+        str,
+        Argument(help="column name of the dataset to answer"),
+    ],
     config_name: Annotated[
         Optional[str],
         Option(help="optional config name for the dataset"),
     ] = None,
     split: Annotated[
         Optional[str],
-        Option(help="optional split for the dataset. If not given, all splits will be translated"),
+        Option(help="optional split for the dataset. If not given, all splits will be answered"),
     ] = None,
     revision: Annotated[
         Optional[str],
@@ -35,35 +39,14 @@ def translate(
     credentials_profiles: Annotated[
         Optional[list[str]], Option(help="which credential profile(s) (key) to use from the credentials file")
     ] = None,
-    src_lang: Annotated[
-        Optional[str],
-        Option(
-            help="source language to translate from. Will be used in the default system prompt or your custom prompt, see 'system_prompt'"
-        ),
-    ] = None,
-    tgt_lang: Annotated[
-        Optional[str],
-        Option(
-            help="target language to translate to. Will be used in the default system prompt or your custom prompt, see 'system_prompt'"
-        ),
-    ] = None,
-    columns: Annotated[
-        Optional[list[str]],
-        Option(
-            help="optional list of column names to translate. Other columns will be dropped. If not given, all columns will be translated"
-        ),
-    ] = None,
-    system_prompt: Annotated[
-        Optional[str],
-        Option(
-            help="optional system prompt to use for the translation to tell the model it has to translate."
-            " If not given, will use a default prompt. Note that that will require you to specify a src_lang and tgt_lang"
-        ),
-    ] = None,
+    response_column: Annotated[
+        str,
+        Option(help="column name where to write the responses to"),
+    ] = "response",
     output_hub_name: Annotated[
         Optional[str],
         Option(
-            help="optional hub name to push the translated dataset to. Should start with an org or username,"
+            help="optional hub name to push the answered dataset to. Should start with an org or username,"
             " e.g. 'MyUserName/my-dataset-name'"
         ),
     ] = None,
@@ -82,10 +65,10 @@ def translate(
     ] = False,
 ):
     """
-    Translate any dataset on the Hugging Face hub to a given language (default Dutch), optionally filtered by
-    split and columns. Depending on the given arguments, will use either a HuggingFace conversational model or the
-    Azure API to translate the dataset. Will save the translated dataset to the given output directory. Optionally,
-    will also upload the translated dataset to the given hub name and revision.
+    Answer a column of any dataset on the Hugging Face hub, optionally filtered by split and columns. Depending on the
+    given arguments, will use either a HuggingFace conversational model or the Azure API to answer the dataset.
+    Will save the answered dataset to the given output directory. Optionally, will also upload the
+    dataset to the given hub name and revision.
     """
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
@@ -102,24 +85,22 @@ def translate(
             verbose=verbose,
         )
 
-    translator = TranslateHFDataset(
+    answerer = AnswerHFDataset(
         text_generator=text_generator,
         dataset_name=dataset_name,
+        content_role_columns=instruction_column,
         config_name=config_name,
         split=split,
         revision=revision,
-        src_lang=src_lang,
-        tgt_lang=tgt_lang,
+        response_column=response_column,
         dout=output_directory,
-        columns=columns,
         output_hub_name=output_hub_name,
         output_hub_revision=output_hub_revision,
         merge_with_original=True,
-        system_prompt=system_prompt,
         verbose=verbose,
     )
 
     if hf_model_name:
-        return translator.process_dataset(max_new_tokens=max_tokens)
+        return answerer.process_dataset(max_new_tokens=max_tokens)
     else:
-        return translator.process_dataset(max_tokens=max_tokens)
+        return answerer.process_dataset(max_tokens=max_tokens)

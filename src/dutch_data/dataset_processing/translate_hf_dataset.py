@@ -50,10 +50,22 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
      which is useful when you want to use different prompts for translating different columns
     """
 
-    src_lang: str = "English"
-    tgt_lang: str = "Dutch"
+    src_lang: str | None = None
+    tgt_lang: str | None = None
     columns: list[str] | None = None
     system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
+
+    def __post_init__(self):
+        super().__post_init__()
+        promp_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
+        for prompt in promp_tests:
+            if ("{src_lang}" in prompt and self.src_lang is None) or (
+                "{tgt_lang}" in prompt and self.tgt_lang is None
+            ):
+                raise ValueError(
+                    "At least one of your prompts contains '{src_lang}' or '{tgt_lang}' templates but you did not"
+                    " specify the source and/or target language with 'src_lang' or 'tgt_lang' respectively."
+                )
 
     def _load_dataset(self) -> DatasetDict:
         """
@@ -88,7 +100,9 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
                 for column_name in split_dataset.column_names:
                     ds_column = split_dataset[column_name]
-                    lang_colname = f"{column_name}_{self.tgt_lang.lower()}"
+                    lang_colname = (
+                        f"{column_name}_{self.tgt_lang.lower()}" if self.tgt_lang else f"{column_name}_translated"
+                    )
                     # Get the IDs of the examples that have already been translated or failed
                     done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
                         already_done_df, failed_df, split_name, lang_colname
@@ -124,7 +138,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
                         if translation_response.error is None and translation_response.text_response is not None:
                             result_row[
-                                f"translation_{self.tgt_lang.lower()}"
+                                f"translation_{self.tgt_lang.lower()}" if self.tgt_lang else "translation"
                             ] = translation_response.text_response.strip()
                             translations.append(result_row)
                             self._write_row_to_fh(fhout, result_row)
@@ -136,7 +150,9 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
         if translations:
             output_datasets = self._postprocess_dataset(
-                translations, orig_dataset, f"translation_{self.tgt_lang.lower()}"
+                translations,
+                orig_dataset,
+                (f"translation_{self.tgt_lang.lower()}" if self.tgt_lang else "translation"),
             )
             return output_datasets
         else:

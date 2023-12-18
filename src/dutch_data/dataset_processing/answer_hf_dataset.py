@@ -12,11 +12,12 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
     appearance. For example, if you have a column called "system" that contains the system messages and a column
     called "user" that contains the user messages, you would pass {"system": "system", "user": "user"}. If you have
     a column called "question" that contains the questions and no system messages, then you would pass
-    {"question": "user"}.
+    {"question": "user"}. If you only have a column with user messages, you can also just pass the name of that
+    column as a string, e.g. "question".
     :param response_column: which column to write answers to
     """
 
-    content_role_columns: dict[str, str] = None
+    content_role_columns: dict[str, str] | str | None = None
     response_column: str = "response"
 
     def __post_init__(self):
@@ -25,6 +26,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                 "You must pass a dictionary of content role columns to 'content_role_columns', which indicates"
                 "which columns to include as well as their role (e.g. 'system', 'user' or 'assistant')."
             )
+        elif isinstance(self.content_role_columns, str):
+            self.content_role_columns = {self.content_role_columns: "user"}
         elif any(role not in ("assistant", "system", "user") for role in self.content_role_columns.values()):
             raise ValueError(
                 "When passing a dictionary as 'content_role_columns', its keys must be column names in the dataset"
@@ -71,24 +74,27 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
                 print(f"Number of messages to answer: {len(messages)}")
 
-                for answer_result in tqdm(
-                    self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
-                    total=len(messages),
-                    desc=f"Answering {split_name}",
+                for answer_response in (
+                    pbar := tqdm(
+                        self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
+                        total=len(messages),
+                    )
                 ):
+                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
+
                     result_row = {
                         "split": split_name,
                         "column": self.response_column,
-                        "idx": answer_result.job_idx,
+                        "idx": answer_response.job_idx,
                     }
 
-                    if answer_result.error is None and answer_result.text_response is not None:
-                        result_row[self.response_column] = answer_result.text_response.strip()
+                    if answer_response.error is None and answer_response.text_response is not None:
+                        result_row[self.response_column] = answer_response.text_response.strip()
                         answers.append(result_row)
                         self._write_row_to_fh(fhout, result_row)
                         num_done += 1
                     else:
-                        result_row["error"] = str(answer_result.error)
+                        result_row["error"] = str(answer_response.error)
                         self._write_row_to_fh(fhout_failed, result_row)
                         num_failed += 1
 

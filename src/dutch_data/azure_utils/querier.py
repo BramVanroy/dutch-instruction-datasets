@@ -286,7 +286,7 @@ class AzureQuerier:
         credentials_profiles: list[str] | str | None = None,
         max_retries: int = 3,
         timeout: float = 30.0,
-        max_workers: int = 6,
+        max_workers: int = 1,
         verbose: bool = False,
     ):
         """
