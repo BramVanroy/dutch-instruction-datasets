@@ -124,7 +124,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
                     for translation_response in (
                         pbar := tqdm(
-                            self.text_generator.batch_query_messages(messages, return_in_order=False, **kwargs),
+                            self.text_generator.batch_query_messages(messages, **kwargs),
                             total=len(messages),
                         )
                     ):

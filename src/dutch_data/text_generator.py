@@ -165,7 +165,7 @@ class AzureTextGenerator(TextGenerator):
     def batch_query_messages(
         self,
         list_of_messages: list[list[dict[str, str]]],
-        return_in_order: bool = True,
+        return_in_order: bool = False,
         **kwargs,
     ) -> Generator[Response, None, None]:
         """
