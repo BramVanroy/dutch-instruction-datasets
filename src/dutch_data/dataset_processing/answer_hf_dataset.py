@@ -45,7 +45,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
         if any(colname not in orig_dataset.column_names for colname in self.content_role_columns.keys()):
             raise ValueError(
                 f"Dataset does not contain all the columns in 'content_role_columns':"
-                f" {self.content_role_columns.keys()}"
+                f" Dataset: {orig_dataset.column_names}; 'content_role_columns':"
+                f" {list(self.content_role_columns.keys())}"
             )
 
         pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
