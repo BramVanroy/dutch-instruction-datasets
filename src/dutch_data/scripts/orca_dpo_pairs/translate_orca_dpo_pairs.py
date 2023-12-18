@@ -82,7 +82,7 @@ def translate_orcadpo_system_question(
             "-p",
             "--credentials_profiles",
             help="which credential profile(s) (key) to use from the credentials file. If not given, will use all"
-                 " profiles in a cyclical manner to optimize API calls",
+            " profiles in a cyclical manner to optimize API calls",
         ),
     ] = None,
     tgt_lang: Annotated[

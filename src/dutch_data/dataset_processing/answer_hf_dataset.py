@@ -21,6 +21,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
     response_column: str = "response"
 
     def __post_init__(self):
+        super().__post_init__()
         if self.content_role_columns is None:
             raise ValueError(
                 "You must pass a dictionary of content role columns to 'content_role_columns', which indicates"
