@@ -33,7 +33,13 @@ def translate(
     ] = None,
     credentials_file: Annotated[Optional[str], Option(help="JSON file containing credentials")] = None,
     credentials_profiles: Annotated[
-        Optional[list[str]], Option(help="which credential profile(s) (key) to use from the credentials file")
+        Optional[list[str]],
+        Option(
+            "-p",
+            "--credentials_profiles",
+            help="which credential profile(s) (key) to use from the credentials file. If not given, will use all"
+                 " profiles in a cyclical manner to optimize API calls",
+        ),
     ] = None,
     src_lang: Annotated[
         Optional[str],
