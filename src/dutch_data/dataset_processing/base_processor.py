@@ -161,6 +161,9 @@ class BaseHFDatasetProcessor(ABC):
         output_datasets = DatasetDict(output_datasets)
         output_datasets.save_to_disk(self.dout)
 
+        if self.output_hub_name:
+            output_datasets.push_to_hub(self.output_hub_name, revision=self.output_hub_revision)
+
         return output_datasets
 
     @abstractmethod
