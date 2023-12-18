@@ -26,11 +26,14 @@ class HFTextGenerator(TextGenerator):
     device_map: dict[str, str | int | torch.device] | str | int | torch.device = None
     load_in_8bit: bool = False
     load_in_4bit: bool = False
-    torch_dtype: torch.dtype | Literal["auto"] | None = None
+    torch_dtype: torch.dtype | Literal["auto"] | str | None = None
     chat_template: str | None = None
     pipe: Pipeline = field(default=None, init=False)
 
     def __post_init__(self):
+        if self.torch_dtype is not None and self.torch_dtype != "auto":
+            self.torch_dtype = getattr(torch, self.torch_dtype)
+
         model_kwargs = {
             "device_map": self.device_map,
             "load_in_8bit": self.load_in_8bit,

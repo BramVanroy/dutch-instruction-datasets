@@ -79,13 +79,31 @@ def translate(
     ] = None,
     max_workers: Annotated[
         int, Option("--max-workers", "-j", help="(azure) how many parallel workers to use to query the API")
-    ] = 6,
+    ] = 1,
     max_retries: Annotated[int, Option(help="(azure) how many times to retry on errors")] = 3,
     max_tokens: Annotated[int, Option(help="max new tokens to generate")] = 2048,
     timeout: Annotated[float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
     verbose: Annotated[
         bool, Option("--verbose", "-v", help="(azure) whether to print more information of the API responses")
     ] = False,
+    device_map: Annotated[
+        Optional[str],
+        Option(
+            help="(hf) device map to use for the model. Can be 'auto' or a device ID (e.g. 'cuda:0')"
+        ),
+    ] = None,
+    load_in_8bit: Annotated[
+        bool, Option(help="(hf) whether to load the model in 8bit precision to save memory")
+    ] = False,
+    load_in_4bit: Annotated[
+        bool, Option(help="(hf) whether to load the model in 4bit precision to save memory")
+    ] = False,
+    torch_dtype: Annotated[
+        Optional[str],
+        Option(
+            help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"
+        ),
+    ] = None,
 ):
     """
     Translate any dataset on the Hugging Face hub to a given language (default Dutch), optionally filtered by
@@ -97,7 +115,13 @@ def translate(
         raise ValueError("Either hf_model_name or credentials_file must be given")
 
     if hf_model_name:
-        text_generator = HFTextGenerator(hf_model_name)
+        text_generator = HFTextGenerator(
+            hf_model_name,
+            device_map=device_map,
+            load_in_8bit=load_in_8bit,
+            load_in_4bit=load_in_4bit,
+            torch_dtype=torch_dtype,
+        )
     else:
         text_generator = AzureTextGenerator.from_json(
             credentials_file,
