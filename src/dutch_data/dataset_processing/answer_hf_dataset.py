@@ -42,12 +42,13 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                 f"Dataset already contains a column called '{self.response_column}'. Please choose another name."
             )
 
-        if any(colname not in orig_dataset.column_names for colname in self.content_role_columns.keys()):
-            raise ValueError(
-                f"Dataset does not contain all the columns in 'content_role_columns':"
-                f" Dataset: {orig_dataset.column_names}; 'content_role_columns':"
-                f" {list(self.content_role_columns.keys())}"
-            )
+        for split, subset in orig_dataset.items():
+            if any(colname not in subset.column_names for colname in self.content_role_columns.keys()):
+                raise ValueError(
+                    f"Dataset ({split} split) does not contain all the columns in 'content_role_columns':"
+                    f" Dataset: {subset.column_names}; 'content_role_columns':"
+                    f" {list(self.content_role_columns.keys())}"
+                )
 
         pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
 
