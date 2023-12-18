@@ -8,32 +8,19 @@ from tqdm import tqdm
 class AnswerHFDataset(BaseHFDatasetProcessor):
     """
     Answers a HuggingFace dataset using the Azure OpenAI API.
-    :param content_role_columns: names of the columns and their associated roles in the conversation in order of
-    appearance. For example, if you have a column called "system" that contains the system messages and a column
-    called "user" that contains the user messages, you would pass {"system": "system", "user": "user"}. If you have
-    a column called "question" that contains the questions and no system messages, then you would pass
-    {"question": "user"}. If you only have a column with user messages, you can also just pass the name of that
-    column as a string, e.g. "question".
+    :param user_column: which column contains the user's message
+    :param system_column: which column contains the system's message
     :param response_column: which column to write answers to
     """
 
-    content_role_columns: dict[str, str] | str | None = None
+    user_column: str | None = None
+    system_column: str | None = None
     response_column: str = "response"
 
     def __post_init__(self):
         super().__post_init__()
-        if self.content_role_columns is None:
-            raise ValueError(
-                "You must pass a dictionary of content role columns to 'content_role_columns', which indicates"
-                "which columns to include as well as their role (e.g. 'system', 'user' or 'assistant')."
-            )
-        elif isinstance(self.content_role_columns, str):
-            self.content_role_columns = {self.content_role_columns: "user"}
-        elif any(role not in ("assistant", "system", "user") for role in self.content_role_columns.values()):
-            raise ValueError(
-                "When passing a dictionary as 'content_role_columns', its keys must be column names in the dataset"
-                " and its values must be one of 'assistant', 'system' or 'user'."
-            )
+        if self.user_column is None:
+            raise ValueError("You must pass a column that contains the user messages.")
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
@@ -44,12 +31,10 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
             )
 
         for split, subset in orig_dataset.items():
-            if any(colname not in subset.column_names for colname in self.content_role_columns.keys()):
-                raise ValueError(
-                    f"Dataset ({split} split) does not contain all the columns in 'content_role_columns':"
-                    f" Dataset: {subset.column_names}; 'content_role_columns':"
-                    f" {list(self.content_role_columns.keys())}"
-                )
+            if self.user_column not in subset.column_names or (
+                self.system_column and self.system_column not in subset.column_names
+            ):
+                raise ValueError(f"Dataset ({split} split) does not contain the user and/or system columns.")
 
         pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
 
@@ -111,7 +96,14 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
         messages = [
             (
                 sample_idx,
-                [{"role": role, "content": sample[colname]} for colname, role in self.content_role_columns.items()],
+                (
+                    [
+                        {"role": "user", "content": sample[self.user_column]},
+                        {"role": "system", "content": sample[self.system_column]},
+                    ]
+                    if self.system_column
+                    else [{"role": "user", "content": sample[self.user_column]}]
+                ),
             )
             for sample_idx, sample in enumerate(dataset)
             if sample_idx not in done_subset_idxs

@@ -13,7 +13,7 @@ app = typer.Typer()
 def answer(
     dataset_name: Annotated[str, Argument(help="dataset name compatible with HuggingFace datasets")],
     output_directory: Annotated[str, Argument(help="output directory to save the answered dataset to")],
-    instruction_column: Annotated[
+    user_column: Annotated[
         str,
         Argument(help="column name of the dataset to answer"),
     ],
@@ -49,6 +49,10 @@ def answer(
         str,
         Option(help="column name where to write the responses to"),
     ] = "response",
+    system_column: Annotated[
+        Optional[str],
+        Option(help="optional system column that will be included as a system message"),
+    ] = None,
     output_hub_name: Annotated[
         Optional[str],
         Option(
@@ -117,7 +121,8 @@ def answer(
     answerer = AnswerHFDataset(
         text_generator=text_generator,
         dataset_name=dataset_name,
-        content_role_columns=instruction_column,
+        user_column=user_column,
+        system_column=system_column,
         config_name=config_name,
         split=split,
         revision=revision,
