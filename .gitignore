@@ -1,6 +1,7 @@
 run-backend.ps
 .eslintrc.js
 .venv
+.*credentials.json
 .credentials.json
 /*.ipynb
 
