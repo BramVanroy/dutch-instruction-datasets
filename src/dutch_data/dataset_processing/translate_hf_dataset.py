@@ -47,16 +47,20 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
     :param system_prompt: system prompt or system prompt template. Can optionally have "{src_lang}" and/or "{tgt_lang}"
      fields that will be replaced with the given source and target languages. If not given, will use a default
      translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
-     which is useful when you want to use different prompts for translating different columns
+     which is useful when you want to use different prompts for translating different columns. If None is given, will
+     also default to the basic system prompt.
     """
 
     src_lang: str | None = None
     tgt_lang: str | None = None
     columns: list[str] | None = None
-    system_prompt: str | dict[str, str] = SYSTEM_TRANSLATION_PROMPT
+    system_prompt: str | dict[str, str] | None = SYSTEM_TRANSLATION_PROMPT
 
     def __post_init__(self):
         super().__post_init__()
+        if self.system_prompt is None:
+            self.system_prompt = SYSTEM_TRANSLATION_PROMPT
+
         promp_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
         for prompt in promp_tests:
             if ("{src_lang}" in prompt and self.src_lang is None) or (
