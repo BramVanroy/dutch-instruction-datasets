@@ -69,6 +69,17 @@ def translate_ultra_feedback_instruction(
         ),
     ] = "Dutch",
     *,
+    system_prompt: Annotated[
+        Optional[str],
+        Option(
+            help="optional system prompt to use. Should be a string with optional {src_lang} and/or {tgt_lang} fields"
+                 " that will be replaced with the given source and target languages. If not given, will use a default"
+                 " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
+                    " that column, which is useful when you want to use different prompts for translating different"
+                    " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
+                    " be a file, in which case the file contents will be used as the system prompt."
+        ),
+    ] = None,
     output_hub_name: Annotated[
         Optional[str],
         Option(
@@ -96,7 +107,8 @@ def translate_ultra_feedback_instruction(
     translate the dataset. Will save the translated dataset to the given output directory. Optionally, will also
     upload the translated dataset to the given hub name and revision.
     """
-    sys_msg = _TRANSLATION_PROMPT if tgt_lang.lower() == "dutch" else SYSTEM_TRANSLATION_PROMPT
+    if system_prompt is None:
+        system_prompt = _TRANSLATION_PROMPT if tgt_lang.lower() == "dutch" else SYSTEM_TRANSLATION_PROMPT
 
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
@@ -122,7 +134,7 @@ def translate_ultra_feedback_instruction(
         output_hub_name=output_hub_name,
         output_hub_revision=output_hub_revision,
         merge_with_original=True,
-        system_prompt=sys_msg,
+        system_prompt=system_prompt,
         verbose=verbose,
     )
 

@@ -4,6 +4,8 @@ run-backend.ps
 .credentials.json
 /*.ipynb
 
+.transl_sysprompt_en-nl
+
 # ignore compiled styles
 *.css
 

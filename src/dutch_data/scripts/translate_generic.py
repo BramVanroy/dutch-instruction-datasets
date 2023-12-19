@@ -5,7 +5,6 @@ from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDatase
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
 from typer import Argument, Option
 
-
 app = typer.Typer()
 
 
@@ -38,7 +37,7 @@ def translate(
             "-p",
             "--credentials_profiles",
             help="which credential profile(s) (key) to use from the credentials file. If not given, will use all"
-            " profiles in a cyclical manner to optimize API calls",
+                 " profiles in a cyclical manner to optimize API calls",
         ),
     ] = None,
     src_lang: Annotated[
@@ -53,24 +52,28 @@ def translate(
             help="target language to translate to. Will be used in the default system prompt or your custom prompt, see 'system_prompt'"
         ),
     ] = None,
+    system_prompt: Annotated[
+        Optional[str],
+        Option(
+            help="optional system prompt to use. Should be a string with optional {src_lang} and/or {tgt_lang} fields"
+                 " that will be replaced with the given source and target languages. If not given, will use a default"
+                 " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
+                 " that column, which is useful when you want to use different prompts for translating different"
+                 " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
+                 " be a file, in which case the file contents will be used as the system prompt."
+        ),
+    ] = None,
     columns: Annotated[
         Optional[list[str]],
         Option(
             help="optional list of column names to translate. Other columns will be dropped. If not given, all columns will be translated"
         ),
     ] = None,
-    system_prompt: Annotated[
-        Optional[str],
-        Option(
-            help="optional system prompt to use for the translation to tell the model it has to translate."
-            " If not given, will use a default prompt. Note that that will require you to specify a src_lang and tgt_lang"
-        ),
-    ] = None,
     output_hub_name: Annotated[
         Optional[str],
         Option(
             help="optional hub name to push the translated dataset to. Should start with an org or username,"
-            " e.g. 'MyUserName/my-dataset-name'"
+                 " e.g. 'MyUserName/my-dataset-name'"
         ),
     ] = None,
     output_hub_revision: Annotated[
@@ -82,7 +85,8 @@ def translate(
     ] = 1,
     max_retries: Annotated[int, Option(help="(azure) how many times to retry on errors")] = 3,
     max_tokens: Annotated[int, Option(help="max new tokens to generate")] = 2048,
-    timeout: Annotated[float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
+    timeout: Annotated[
+        float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
     verbose: Annotated[
         bool, Option("--verbose", "-v", help="(azure) whether to print more information of the API responses")
     ] = False,

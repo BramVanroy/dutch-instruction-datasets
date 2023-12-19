@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from datasets import DatasetDict
 from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
@@ -48,7 +49,8 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
      fields that will be replaced with the given source and target languages. If not given, will use a default
      translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
      which is useful when you want to use different prompts for translating different columns. If None is given, will
-     also default to the basic system prompt.
+     also default to the basic system prompt. 'system_prompt' can also be a file, in which case the file contents will
+     be used as the system prompt.
     """
 
     src_lang: str | None = None
@@ -60,6 +62,10 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
         super().__post_init__()
         if self.system_prompt is None:
             self.system_prompt = SYSTEM_TRANSLATION_PROMPT
+
+        pfprompt = Path(self.system_prompt)
+        if pfprompt.is_file():
+            self.system_prompt = pfprompt.read_text(encoding="utf-8")
 
         promp_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
         for prompt in promp_tests:
