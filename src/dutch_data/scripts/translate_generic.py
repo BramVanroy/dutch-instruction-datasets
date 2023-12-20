@@ -2,8 +2,9 @@ from typing import Annotated, Optional
 
 import typer
 from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
-from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator
+from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
 from typer import Argument, Option
+
 
 app = typer.Typer()
 
@@ -30,6 +31,15 @@ def translate(
             help="HuggingFace model name to use for the text generator. Note that currently only conversational style models are supported"
         ),
     ] = None,
+    vllm_endpoint: Annotated[
+        Optional[str],
+        Option(
+            help="VLLM endpoint to send requests to, if you have a VLLM server running. Note that this must be"
+            " compatible with Chat Completion, as described here: https://docs.vllm.ai/en/latest/getting_started/quickstart.html#using-openai-completions-api-with-vllm."
+            "So this will likely be a URL like 'http://localhost:8000/v1/chat/completions'. Make sure to also"
+            " pass in 'hf_model_name', which must match the model that is loaded on the VLLM server."
+        ),
+    ] = None,
     credentials_file: Annotated[Optional[str], Option(help="JSON file containing credentials")] = None,
     credentials_profiles: Annotated[
         Optional[list[str]],
@@ -37,7 +47,7 @@ def translate(
             "-p",
             "--credentials_profiles",
             help="which credential profile(s) (key) to use from the credentials file. If not given, will use all"
-                 " profiles in a cyclical manner to optimize API calls",
+            " profiles in a cyclical manner to optimize API calls",
         ),
     ] = None,
     src_lang: Annotated[
@@ -56,11 +66,11 @@ def translate(
         Optional[str],
         Option(
             help="optional system prompt to use. Should be a string with optional {src_lang} and/or {tgt_lang} fields"
-                 " that will be replaced with the given source and target languages. If not given, will use a default"
-                 " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
-                 " that column, which is useful when you want to use different prompts for translating different"
-                 " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
-                 " be a file, in which case the file contents will be used as the system prompt."
+            " that will be replaced with the given source and target languages. If not given, will use a default"
+            " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
+            " that column, which is useful when you want to use different prompts for translating different"
+            " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
+            " be a file, in which case the file contents will be used as the system prompt."
         ),
     ] = None,
     columns: Annotated[
@@ -73,7 +83,7 @@ def translate(
         Optional[str],
         Option(
             help="optional hub name to push the translated dataset to. Should start with an org or username,"
-                 " e.g. 'MyUserName/my-dataset-name'"
+            " e.g. 'MyUserName/my-dataset-name'"
         ),
     ] = None,
     output_hub_revision: Annotated[
@@ -85,8 +95,7 @@ def translate(
     ] = 1,
     max_retries: Annotated[int, Option(help="(azure) how many times to retry on errors")] = 3,
     max_tokens: Annotated[int, Option(help="max new tokens to generate")] = 2048,
-    timeout: Annotated[
-        float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
+    timeout: Annotated[float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
     verbose: Annotated[
         bool, Option("--verbose", "-v", help="(azure) whether to print more information of the API responses")
     ] = False,
@@ -117,14 +126,22 @@ def translate(
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
 
-    if hf_model_name:
-        text_generator = HFTextGenerator(
-            hf_model_name,
-            device_map=device_map,
-            load_in_8bit=load_in_8bit,
-            load_in_4bit=load_in_4bit,
-            torch_dtype=torch_dtype,
+    if vllm_endpoint is not None and hf_model_name is None:
+        raise ValueError(
+            "If vllm_endpoint is given, hf_model_name must also be given and it must correspond with model names that are running on the VLLM server"
         )
+
+    if hf_model_name:
+        if vllm_endpoint is not None:
+            text_generator = VLLMTextGenerator(hf_model_name, vllm_endpoint)
+        else:
+            text_generator = HFTextGenerator(
+                hf_model_name,
+                device_map=device_map,
+                load_in_8bit=load_in_8bit,
+                load_in_4bit=load_in_4bit,
+                torch_dtype=torch_dtype,
+            )
     else:
         text_generator = AzureTextGenerator.from_json(
             credentials_file,

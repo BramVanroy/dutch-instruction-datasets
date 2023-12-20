@@ -73,11 +73,11 @@ def translate_ultra_feedback_instruction(
         Optional[str],
         Option(
             help="optional system prompt to use. Should be a string with optional {src_lang} and/or {tgt_lang} fields"
-                 " that will be replaced with the given source and target languages. If not given, will use a default"
-                 " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
-                    " that column, which is useful when you want to use different prompts for translating different"
-                    " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
-                    " be a file, in which case the file contents will be used as the system prompt."
+            " that will be replaced with the given source and target languages. If not given, will use a default"
+            " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
+            " that column, which is useful when you want to use different prompts for translating different"
+            " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
+            " be a file, in which case the file contents will be used as the system prompt."
         ),
     ] = None,
     output_hub_name: Annotated[
