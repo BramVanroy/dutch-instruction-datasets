@@ -327,17 +327,17 @@ class VLLMTextGenerator(TextGenerator):
             "result": None,
             "text_response": None,
             "error": None,
+            **self._submit_request(
+                messages=messages,
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                **kwargs,
+            ),
         }
-        response_d = self._submit_request(
-            messages=messages,
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            **kwargs,
-        )
-        response = Response(**response, **response_d)
+        response = Response(**response)
 
         return response
 
@@ -376,19 +376,18 @@ class VLLMTextGenerator(TextGenerator):
                 "result": None,
                 "text_response": None,
                 "error": None,
+                **self._submit_request(
+                    messages=messages,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=do_sample,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    **kwargs,
+                ),
             }
 
-            response_d = self._submit_request(
-                messages=messages,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                **kwargs,
-            )
-
-            yield Response(**response, **response_d)
+            yield Response(**response)
 
     def _submit_request(self, **kwargs) -> dict[str, Any]:
         """
