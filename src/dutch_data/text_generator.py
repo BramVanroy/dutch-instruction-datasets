@@ -406,9 +406,9 @@ class VLLMTextGenerator(TextGenerator):
             completion = requests.post(
                 self.endpoint, json=payload, headers={"Content-Type": "application/json"}
             ).json()
-            choice = completion.choices[0]
+            choice = completion["choices"][0]
             response["result"] = completion
-            response["text_response"] = choice.message.content
+            response["text_response"] = choice["message"]["content"]
         except Exception as exc:
             response["error"] = exc
 
