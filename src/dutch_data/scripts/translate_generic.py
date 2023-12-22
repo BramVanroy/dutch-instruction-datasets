@@ -18,8 +18,8 @@ def translate(
         Option(help="optional config name for the dataset"),
     ] = None,
     split: Annotated[
-        Optional[str],
-        Option(help="optional split for the dataset. If not given, all splits will be translated"),
+        Optional[list[str]],
+        Option(help="optional splits for the dataset. If not given, all splits will be translated"),
     ] = None,
     revision: Annotated[
         Optional[str],
@@ -119,7 +119,7 @@ def translate(
 ):
     """
     Translate any dataset on the Hugging Face hub to a given language (default Dutch), optionally filtered by
-    split and columns. Depending on the given arguments, will use either a HuggingFace conversational model or the
+    splits and columns. Depending on the given arguments, will use either a HuggingFace conversational model or the
     Azure API to translate the dataset. Will save the translated dataset to the given output directory. Optionally,
     will also upload the translated dataset to the given hub name and revision.
     """
@@ -156,7 +156,7 @@ def translate(
         text_generator=text_generator,
         dataset_name=dataset_name,
         config_name=config_name,
-        split=split,
+        splits=split,
         revision=revision,
         src_lang=src_lang,
         tgt_lang=tgt_lang,

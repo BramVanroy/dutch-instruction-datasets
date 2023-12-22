@@ -273,6 +273,9 @@ class AzureTextGenerator(TextGenerator):
 class VLLMTextGenerator(TextGenerator):
     """
     Text generator for the VLLM API.
+    # TODO: rename to VLLMServerTextGenerator, and add VLLMTextGenerator for its easy batching
+    # https://docs.vllm.ai/en/latest/getting_started/quickstart.html#offline-batched-inference
+
     :param model_name: name of the model to use. Must match the model that is loaded on the VLLM server.
     :param endpoint: endpoint of the API. Note that this must be compatible with Chat Completion, as described here:
     https://docs.vllm.ai/en/latest/getting_started/quickstart.html#using-openai-completions-api-with-vllm. So this

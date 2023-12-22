@@ -18,7 +18,7 @@ class BaseHFDatasetProcessor(ABC):
     or any other TextGenerator subclass that implements the `query_messages` method
     :param dout: output directory to save the translated dataset to. Temporary progress will also be saved here
     :param config_name: optional config name for the dataset
-    :param split: optional split for the dataset. If not given, all splits will be translated
+    :param splits: optional split or list of splits for the dataset. If not given, all splits will be translated
     :param revision: optional revision for the dataset. If not given, will load the main revision
     :param max_samples: maximum number of samples to translate. Useful for testing
     :param output_hub_name: optional hub name to push the translated dataset to. Should start with an org or username,
@@ -33,7 +33,7 @@ class BaseHFDatasetProcessor(ABC):
     text_generator: TextGenerator
     dout: PathLike | str
     config_name: str | None = None
-    split: str | None = None
+    splits: list[str] | str | None = None
     revision: str | None = None
     max_samples: int | None = None
     output_hub_name: str | None = None
@@ -44,6 +44,8 @@ class BaseHFDatasetProcessor(ABC):
     def __post_init__(self):
         self.dout: Path = Path(self.dout).resolve()
         self.dout.mkdir(parents=True, exist_ok=True)
+        if self.splits is not None and isinstance(self.splits, str):
+            self.splits = [self.splits]
 
     def _load_done_failed_dfs(self) -> tuple[Path, pd.DataFrame | None, Path, pd.DataFrame | None]:
         """
@@ -101,8 +103,12 @@ class BaseHFDatasetProcessor(ABC):
         :return: a loaded DatasetDict
         """
         orig_dataset: DatasetDict = load_dataset(self.dataset_name, name=self.config_name, revision=self.revision)
-        if self.split is not None:
-            orig_dataset = DatasetDict({"train": orig_dataset[self.split]})
+        if self.splits is not None:
+            for splitname in self.splits:
+                if splitname not in orig_dataset:
+                    raise ValueError(f"Split {splitname} not found in dataset {self.dataset_name}."
+                                     f" Available splits: {orig_dataset.keys()}")
+            orig_dataset = DatasetDict({k: v for k, v in orig_dataset.items() if k in self.splits})
         return orig_dataset
 
     @staticmethod

@@ -22,8 +22,8 @@ def answer(
         Option(help="optional config name for the dataset"),
     ] = None,
     split: Annotated[
-        Optional[str],
-        Option(help="optional split for the dataset. If not given, all splits will be answered"),
+        Optional[list[str]],
+        Option(help="optional splits for the dataset. If not given, all splits will be translated"),
     ] = None,
     revision: Annotated[
         Optional[str],
@@ -141,7 +141,7 @@ def answer(
         user_column=user_column,
         system_column=system_column,
         config_name=config_name,
-        split=split,
+        splits=split,
         revision=revision,
         response_column=response_column,
         dout=output_directory,

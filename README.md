@@ -53,30 +53,38 @@ interactive-query huggingface BramVanroy/Llama-2-13b-chat-dutch --load-in-8bit
 ```
 
 
-### `translate-orcadpo`
+### `translate-hf`
 
-As a starting point, we want to translate the system messages and the questions of Intel's DPO dataset, which
-they selected from OpenOrca. This script will translate the messages and questions from English to Dutch by default
-but you can specify a different target language if you want to. You see here that `--hub-name` is used to specify
-the dataset on the Hugging Face hub where we will upload the translated dataset to. Adapt this to your own profile.
+Most of the time we want to start with translating system message and/or user messages, and then "answer" those later
+on in a next step. `translate-hf` is the entry point to translate specific columns and splits of any dataset on the
+Hugging Face hub. It will save the translated dataset to a temporary location, and then upload it to the hub.
+
+It should be relatively robust as it saves intermediate results and can simply restart where it left off.
 
 Example usage:
 
 ```shell
-translate-orcadpo .credentials.json gpt-35-turbo data/translated-orca-dpo --hub-name BramVanroy/orca_dpo_pairs_dutch
+translate-hf HuggingFaceH4/ultrachat_200k data/ultrachat_200k/ultrachat_200k-gpt-4-turbo-translated --split train_sft --split test_sft --columns prompt --src-lang English --tgt-lang Dutch --output-hub-name BramVanroy/ultrachat_200k_dutch --output-hub-revision 1-gpt-4-turbo-translated -j 8 --system-prompt .transl_sysprompt_en-nl
 ```
 
+This will:
 
-### `answer-orcadpo`
+- Translate the `train_sft` and `test_sft` splits of `HuggingFaceH4/ultrachat_200k` from English to Dutch
+- It will save temporary results to `data/ultrachat_200k/ultrachat_200k-gpt-4-turbo-translated`
+- It will upload the final dataset to revision (branch) `1-gpt-4-turbo-translated` in the `BramVanroy/ultrachat_200k_dutch` dataset
+- It will use 8 processes to speed up the translation
+- It will use the `.transl_sysprompt_en-nl` file that contains a system prompt as the system message
 
-Finally, using the translations of the system message and the questions, we can query the model to get the answers
-to the questions and save them to a file as a Hugging Face dataset. Note that the starting point is, again, a dataset
-on the Hugging Face hub. This dataset is the translated version of the DPO dataset created in the previous step.
+### `answer-hf`
+
+In the next step we want to use models or APIs to generate an answer to given columns. This script will do that for
+you. It will also save intermediate results and can simply restart where it left off.
+
 
 Example usage:
 
 ```shell
-answer-orcadpo .credentials.json gpt-35-turbo BramVanroy/orca_dpo_pairs_dutch question_dutch data/answered-orca-dpo --system-column system_dutch
+answer-hf --help
 ```
 
 
