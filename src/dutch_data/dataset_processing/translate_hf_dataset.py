@@ -63,9 +63,14 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
         if self.system_prompt is None:
             self.system_prompt = SYSTEM_TRANSLATION_PROMPT
 
-        pfprompt = Path(self.system_prompt)
-        if pfprompt.is_file():
-            self.system_prompt = pfprompt.read_text(encoding="utf-8")
+        try:
+            pfprompt = Path(self.system_prompt)
+            if pfprompt.is_file():
+                self.system_prompt = pfprompt.read_text(encoding="utf-8")
+        except OSError:
+            # Can occur when the system prompt is a very long string, in which case pathlib
+            # will raise a OSError "File name too long"
+            pass
 
         promp_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
         for prompt in promp_tests:
