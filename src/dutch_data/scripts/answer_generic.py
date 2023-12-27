@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 
 import typer
 from dutch_data.dataset_processing import AnswerHFDataset
-from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
+from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator
 from typer import Argument, Option
 
 
@@ -116,7 +116,7 @@ def answer(
 
     if hf_model_name:
         if vllm_endpoint is not None:
-            text_generator = VLLMTextGenerator(hf_model_name, vllm_endpoint)
+            text_generator = VLLMServerTextGenerator(hf_model_name, vllm_endpoint)
         else:
             text_generator = HFTextGenerator(
                 hf_model_name,

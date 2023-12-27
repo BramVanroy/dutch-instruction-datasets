@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from os import PathLike
 from typing import Any, Generator, Literal
+from vllm import LLM as VllmLLM, SamplingParams as VllmSamplingParams
 
 import requests
 import torch
@@ -272,9 +273,33 @@ class AzureTextGenerator(TextGenerator):
 @dataclass
 class VLLMTextGenerator(TextGenerator):
     """
-    Text generator for the VLLM API.
-    # TODO: rename to VLLMServerTextGenerator, and add VLLMTextGenerator for its easy batching
-    # https://docs.vllm.ai/en/latest/getting_started/quickstart.html#offline-batched-inference
+    Text generator for the VLLM Python library.
+    TODO: implement all methods
+
+    :param model_name: name of the model to use
+    :param trust_remote_code: whether to trust code in the remote model's repository. Might be required for very
+    new models
+    :param tensor_parallel_size: tensor parallel size to use for the model, i.e., how many GPUs to use
+    :param dtype: data type to use for the model, e.g. `float32`, `float16`, `bfloat16`, or 'auto'
+    """
+    model_name: str
+    trust_remote_code: bool = False
+    tensor_parallel_size: int = 1
+    dtype: str = "auto"
+
+    def __post_init__(self):
+        self.llm = VllmLLM(
+            model=self.model_name,
+            trust_remote_code=self.trust_remote_code,
+            tensor_parallel_size=self.tensor_parallel_size,
+            dtype=self.dtype,
+        )
+
+
+@dataclass
+class VLLMServerTextGenerator(TextGenerator):
+    """
+    Text generator for the VLLM API, which will call on an endpoint URL that has an VLLM instance running.
 
     :param model_name: name of the model to use. Must match the model that is loaded on the VLLM server.
     :param endpoint: endpoint of the API. Note that this must be compatible with Chat Completion, as described here:
