@@ -24,7 +24,6 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
-
         if self.response_column in orig_dataset.column_names:
             raise ValueError(
                 f"Dataset already contains a column called '{self.response_column}'. Please choose another name."

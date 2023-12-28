@@ -103,7 +103,8 @@ class BaseHFDatasetProcessor(ABC):
         :return: a loaded DatasetDict
         """
         orig_dataset: DatasetDict = load_dataset(self.dataset_name, name=self.config_name, revision=self.revision)
-        if self.splits is not None:
+
+        if self.splits:
             for splitname in self.splits:
                 if splitname not in orig_dataset:
                     raise ValueError(
@@ -111,6 +112,14 @@ class BaseHFDatasetProcessor(ABC):
                         f" Available splits: {orig_dataset.keys()}"
                     )
             orig_dataset = DatasetDict({k: v for k, v in orig_dataset.items() if k in self.splits})
+
+        if not orig_dataset:
+            raise ValueError(
+                "Dataset appears to empty, perhaps because you selected an empty dataset:"
+                f" dataset_name={self.dataset_name}, config_name={self.config_name},"
+                f" revision={self.revision}, splits={self.splits}"
+            )
+
         return orig_dataset
 
     @staticmethod
