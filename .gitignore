@@ -4,6 +4,7 @@ run-backend.ps
 .*credentials.json
 .credentials.json
 /*.ipynb
+logbook.md
 
 .transl_sysprompt_en-nl
 

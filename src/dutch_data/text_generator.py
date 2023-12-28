@@ -310,13 +310,14 @@ class VLLMTextGenerator(TextGenerator):
     def batch_query_messages(
         self,
         list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
-        use_tqdm: bool = True,
+        use_tqdm: bool = False,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
         repetition_penalty: float = 1.0,
         temperature: float = 1.0,
         top_p: float = 1.0,
         top_k: int = -1,
+        max_new_tokens: int = 128,
         **other_gen_kwargs,
     ) -> Generator[Response, None, None]:
         """
@@ -328,16 +329,17 @@ class VLLMTextGenerator(TextGenerator):
         :param use_tqdm: whether to use tqdm for progress bar presence_penalty: Float that penalizes new tokens based
         on whether they appear in the generated text so far. Values > 0 encourage the model to use new tokens, while
         values < 0 encourage the model to repeat tokens.
-        frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
+        :param frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
         Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
-        repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the
+        :param repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the
         generated text so far. Values > 1 encourage the model to use new tokens, while values < 1 encourage
         the model to repeat tokens.
-        temperature: Float that controls the randomness of the sampling. Lower values make the model more
+        :param temperature: Float that controls the randomness of the sampling. Lower values make the model more
         deterministic, while higher values make the model more random. Zero means greedy sampling.
-        top_p: Float that controls the cumulative probability of the top tokens to consider. Must be in (0, 1]. Set
+        :param top_p: Float that controls the cumulative probability of the top tokens to consider. Must be in (0, 1]. Set
         to 1 to consider all tokens.
-        top_k: Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.
+        :param top_k: Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.
+        :param max_new_tokens: max. number of tokens to generate
         :param other_gen_kwargs: other generation kwargs to pass to the generate function
         :return: generator of Responses
         """
@@ -359,11 +361,12 @@ class VLLMTextGenerator(TextGenerator):
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            max_tokens=max_new_tokens,
             **other_gen_kwargs,
         )
 
         generated = self.llm.generate(prompted_list_of_msgs, sampling_params, use_tqdm=use_tqdm)
-        for job_idx, output in zip(job_idxs, generated):
+        for job_idx, output, messages in zip(job_idxs, generated, list_of_messages):
             generated_text = output.outputs[0].text
             response = {
                 "job_idx": job_idx,
