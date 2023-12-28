@@ -1,9 +1,10 @@
 from typing import Annotated, Optional
 
+import torch
 import typer
 from colorama import Back, Fore, Style
 from dutch_data.azure_utils import AzureQuerier, Credentials
-from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, TextGenerator
+from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, TextGenerator, VLLMTextGenerator
 from dutch_data.utils import build_message
 from typer import Argument
 
@@ -28,16 +29,21 @@ def huggingface(
     ] = None,
     load_in_8bit: Annotated[bool, typer.Option(help="whether to load the model in 8 bit precision")] = False,
     load_in_4bit: Annotated[bool, typer.Option(help="whether to load the model in 4 bit precision")] = False,
+    use_vllm: Annotated[bool, typer.Option(help="whether to use VLLM for faster inference")] = False,
 ):
     """
     Interactive playground for querying model's that are available on HuggingFace's model hub
     """
-    generator = HFTextGenerator(
-        model_name=model_name,
-        device_map=device_map,
-        load_in_8bit=load_in_8bit,
-        load_in_4bit=load_in_4bit,
-    )
+    if use_vllm:
+        num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+        generator = VLLMTextGenerator(model_name=model_name, tensor_parallel_size=num_devices)
+    else:
+        generator = HFTextGenerator(
+            model_name=model_name,
+            device_map=device_map,
+            load_in_8bit=load_in_8bit,
+            load_in_4bit=load_in_4bit,
+        )
     interactive_playground(generator, system_prompt=system_prompt)
 
 

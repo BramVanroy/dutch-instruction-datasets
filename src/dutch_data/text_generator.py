@@ -297,6 +297,14 @@ class VLLMTextGenerator(TextGenerator):
         )
 
     def query_messages(self, messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]], **kwargs) -> Response:
+        """
+        Query the VLLM model with a single sample of messages.
+        :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
+        "content" keys, or a tuple of (job_idx, messages) where job_idx is an int
+        :param kwargs: additional kwargs to pass to the model call, which include generation parameters such as
+        'temperature', 'top_p', 'top_k', etc.
+        :return: generated assistant Response
+        """
         return next(self.batch_query_messages([messages]), **kwargs)
 
     def batch_query_messages(
@@ -311,6 +319,28 @@ class VLLMTextGenerator(TextGenerator):
         top_k: int = -1,
         **other_gen_kwargs,
     ) -> Generator[Response, None, None]:
+        """
+        Query the VLLM model with the given messages. Batching will occur automatically in VLLM based on memory
+        constriants. Parameter descriptions taken from the VLLM documentation.
+
+        :param list_of_messages: messages to query the model with. A list of lists of dicts where each dict must have
+        a "role" and "content" keys, or a list of tuples of (job_idx, messages) where job_idx is an int
+        :param use_tqdm: whether to use tqdm for progress bar presence_penalty: Float that penalizes new tokens based
+        on whether they appear in the generated text so far. Values > 0 encourage the model to use new tokens, while
+        values < 0 encourage the model to repeat tokens.
+        frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
+        Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
+        repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the
+        generated text so far. Values > 1 encourage the model to use new tokens, while values < 1 encourage
+        the model to repeat tokens.
+        temperature: Float that controls the randomness of the sampling. Lower values make the model more
+        deterministic, while higher values make the model more random. Zero means greedy sampling.
+        top_p: Float that controls the cumulative probability of the top tokens to consider. Must be in (0, 1]. Set
+        to 1 to consider all tokens.
+        top_k: Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.
+        :param other_gen_kwargs: other generation kwargs to pass to the generate function
+        :return: generator of Responses
+        """
         if isinstance(list_of_messages[0][0], int):
             job_idxs = [item[0] for item in list_of_messages]
             list_of_messages = [item[1] for item in list_of_messages]
