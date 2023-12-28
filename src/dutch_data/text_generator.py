@@ -6,7 +6,7 @@ from typing import Any, Generator, Literal
 import requests
 import torch
 from dutch_data.azure_utils import AzureQuerier, Credentials
-from dutch_data.utils import Response
+from dutch_data.utils import Response, batchify
 from transformers import Conversation, Pipeline, pipeline
 from vllm import LLM as VllmLLM
 from vllm import SamplingParams as VllmSamplingParams
@@ -318,6 +318,7 @@ class VLLMTextGenerator(TextGenerator):
         top_p: float = 1.0,
         top_k: int = -1,
         max_new_tokens: int = 128,
+        batch_size: int = 16,
         **other_gen_kwargs,
     ) -> Generator[Response, None, None]:
         """
@@ -329,6 +330,8 @@ class VLLMTextGenerator(TextGenerator):
         :param use_tqdm: whether to use tqdm for progress bar presence_penalty: Float that penalizes new tokens based
         on whether they appear in the generated text so far. Values > 0 encourage the model to use new tokens, while
         values < 0 encourage the model to repeat tokens.
+        :param presence_penalty: Float that penalizes new tokens based on whether they appear in the generated text
+        so far. Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
         :param frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
         Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
         :param repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the
@@ -340,6 +343,10 @@ class VLLMTextGenerator(TextGenerator):
         to 1 to consider all tokens.
         :param top_k: Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.
         :param max_new_tokens: max. number of tokens to generate
+        :param batch_size: pseudo-batch size. While VLLM does batching automatically based on available RAM,
+        we also add an option here for pseudo-batching. This is useful to get a better indication of process
+        because VLLM only returns the final list but we would like to have more frequent return values instead of
+        just at the end.
         :param other_gen_kwargs: other generation kwargs to pass to the generate function
         :return: generator of Responses
         """
@@ -365,18 +372,23 @@ class VLLMTextGenerator(TextGenerator):
             **other_gen_kwargs,
         )
 
-        generated = self.llm.generate(prompted_list_of_msgs, sampling_params, use_tqdm=use_tqdm)
-        for job_idx, output, messages in zip(job_idxs, generated, list_of_messages):
-            generated_text = output.outputs[0].text
-            response = {
-                "job_idx": job_idx,
-                "messages": messages,
-                "result": output,
-                "text_response": generated_text,
-                "error": None,
-            }
+        item_idx = 0
+        for batch_msgs in batchify(prompted_list_of_msgs, batch_size=batch_size):
+            batch_generated = self.llm.generate(batch_msgs, sampling_params, use_tqdm=use_tqdm)
+            for generated, item_messages in zip(batch_generated, batch_msgs):
+                job_idx = job_idxs[item_idx]
+                generated_text = generated.outputs[0].text
+                response = {
+                    "job_idx": job_idx,
+                    "messages": item_messages,
+                    "result": generated,
+                    "text_response": generated_text,
+                    "error": None,
+                }
 
-            yield Response(**response)
+                yield Response(**response)
+
+                item_idx += 1
 
 
 @dataclass
