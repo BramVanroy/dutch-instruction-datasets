@@ -140,7 +140,7 @@ def answer(
             text_generator = VLLMServerTextGenerator(hf_model_name, vllm_endpoint)
         elif use_vllm:
             num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
-            generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
+            text_generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
         else:
             text_generator = HFTextGenerator(
                 hf_model_name,

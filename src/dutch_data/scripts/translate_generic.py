@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 import torch
 import typer
 from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
-from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator
+from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator, VLLMTextGenerator
 from typer import Argument, Option
 
 
@@ -156,7 +156,7 @@ def translate(
             text_generator = VLLMServerTextGenerator(hf_model_name, vllm_endpoint)
         elif use_vllm:
             num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
-            generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
+            text_generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
         else:
             text_generator = HFTextGenerator(
                 hf_model_name,
