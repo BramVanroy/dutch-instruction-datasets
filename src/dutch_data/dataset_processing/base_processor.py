@@ -106,8 +106,10 @@ class BaseHFDatasetProcessor(ABC):
         if self.splits is not None:
             for splitname in self.splits:
                 if splitname not in orig_dataset:
-                    raise ValueError(f"Split {splitname} not found in dataset {self.dataset_name}."
-                                     f" Available splits: {orig_dataset.keys()}")
+                    raise ValueError(
+                        f"Split {splitname} not found in dataset {self.dataset_name}."
+                        f" Available splits: {orig_dataset.keys()}"
+                    )
             orig_dataset = DatasetDict({k: v for k, v in orig_dataset.items() if k in self.splits})
         return orig_dataset
 

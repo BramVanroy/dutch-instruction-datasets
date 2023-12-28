@@ -2,13 +2,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from os import PathLike
 from typing import Any, Generator, Literal
-from vllm import LLM as VllmLLM, SamplingParams as VllmSamplingParams
 
 import requests
 import torch
 from dutch_data.azure_utils import AzureQuerier, Credentials
 from dutch_data.utils import Response
 from transformers import Conversation, Pipeline, pipeline
+from vllm import LLM as VllmLLM
+from vllm import SamplingParams as VllmSamplingParams
 
 
 @dataclass
@@ -186,7 +187,7 @@ class AzureTextGenerator(TextGenerator):
 
     def query_messages(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
         **kwargs,
     ) -> Response:
         """
@@ -202,7 +203,7 @@ class AzureTextGenerator(TextGenerator):
 
     def batch_query_messages(
         self,
-        list_of_messages: list[list[dict[str, str]]],
+        list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
         return_in_order: bool = False,
         **kwargs,
     ) -> Generator[Response, None, None]:
@@ -274,7 +275,6 @@ class AzureTextGenerator(TextGenerator):
 class VLLMTextGenerator(TextGenerator):
     """
     Text generator for the VLLM Python library.
-    TODO: implement all methods
 
     :param model_name: name of the model to use
     :param trust_remote_code: whether to trust code in the remote model's repository. Might be required for very
@@ -282,6 +282,7 @@ class VLLMTextGenerator(TextGenerator):
     :param tensor_parallel_size: tensor parallel size to use for the model, i.e., how many GPUs to use
     :param dtype: data type to use for the model, e.g. `float32`, `float16`, `bfloat16`, or 'auto'
     """
+
     model_name: str
     trust_remote_code: bool = False
     tensor_parallel_size: int = 1
@@ -294,6 +295,55 @@ class VLLMTextGenerator(TextGenerator):
             tensor_parallel_size=self.tensor_parallel_size,
             dtype=self.dtype,
         )
+
+    def query_messages(self, messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]], **kwargs) -> Response:
+        return next(self.batch_query_messages([messages]), **kwargs)
+
+    def batch_query_messages(
+        self,
+        list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
+        use_tqdm: bool = True,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repetition_penalty: float = 1.0,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        top_k: int = -1,
+        **other_gen_kwargs,
+    ) -> Generator[Response, None, None]:
+        if isinstance(list_of_messages[0][0], int):
+            job_idxs = [item[0] for item in list_of_messages]
+            list_of_messages = [item[1] for item in list_of_messages]
+        else:
+            job_idxs = list(range(len(list_of_messages)))
+
+        prompted_list_of_msgs = [
+            self.llm.get_tokenizer().apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+            for msgs in list_of_messages
+        ]
+
+        sampling_params = VllmSamplingParams(
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            repetition_penalty=repetition_penalty,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            **other_gen_kwargs,
+        )
+
+        generated = self.llm.generate(prompted_list_of_msgs, sampling_params, use_tqdm=use_tqdm)
+        for job_idx, output in zip(job_idxs, generated):
+            generated_text = output.outputs[0].text
+            response = {
+                "job_idx": job_idx,
+                "messages": messages,
+                "result": output,
+                "text_response": generated_text,
+                "error": None,
+            }
+
+            yield Response(**response)
 
 
 @dataclass

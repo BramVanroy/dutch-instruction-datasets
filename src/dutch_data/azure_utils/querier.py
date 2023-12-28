@@ -190,7 +190,9 @@ class AzureQuerier:
 
         return Response(**response)
 
-    def query_messages(self, messages: list[ChatCompletionMessageParam], **kwargs) -> Response:
+    def query_messages(
+        self, messages: list[ChatCompletionMessageParam] | tuple[int, list[ChatCompletionMessageParam]], **kwargs
+    ) -> Response:
         """
         Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
         :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
