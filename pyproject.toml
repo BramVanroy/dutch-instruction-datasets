@@ -53,6 +53,7 @@ dev = ["flake8", "black", "isort", "pytest"]
 [project.scripts]
 translate-hf = "dutch_data.scripts.translate_generic:app"
 answer-hf = "dutch_data.scripts.answer_generic:app"
+conversation-hf = "dutch_data.scripts.conversation_generic:app"
 interactive-query = "dutch_data.scripts.interactive_querying:app"
 
 # TOOLS

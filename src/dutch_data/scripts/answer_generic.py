@@ -106,11 +106,13 @@ def answer(
         Option(help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
     ] = None,
     batch_size: Annotated[
-        int, Option(
+        int,
+        Option(
             help="(hf/use_vllm) batch size for inference. Note that higher values not necessarily increase speed! When"
-                 " 'use_vllm', this is just a pseudo-batch. VLLM does batching by itself but to get responses of"
-                 " smaller batches to write them to output files more quickly (rather than at the very end only) we can"
-                 " set a smaller pseudo-batch size. In the VLLM case, I recommend to set this to a non-1 value.")
+            " 'use_vllm', this is just a pseudo-batch. VLLM does batching by itself but to get responses of"
+            " smaller batches to write them to output files more quickly (rather than at the very end only) we can"
+            " set a smaller pseudo-batch size. In the VLLM case, I recommend to set this to a non-1 value."
+        ),
     ] = 1,
 ):
     """

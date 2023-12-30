@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 
 import torch
 import typer
-from dutch_data.dataset_processing.translate_hf_dataset import TranslateHFDataset
+from dutch_data.dataset_processing import ConversationHFDataset
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator, VLLMTextGenerator
 from typer import Argument, Option
 
@@ -11,16 +11,44 @@ app = typer.Typer()
 
 
 @app.command()
-def translate(
+def conversation(
     dataset_name: Annotated[str, Argument(help="dataset name compatible with HuggingFace datasets")],
-    output_directory: Annotated[str, Argument(help="output directory to save the translated dataset to")],
+    output_directory: Annotated[str, Argument(help="output directory to save the answered dataset to")],
+    seed_column: Annotated[
+        str,
+        Argument(help="column name of the dataset to use as seed question"),
+    ],
+    system_prompt: Annotated[
+        str,
+        Argument(
+            help="""system prompt that has the {subject} field to fill in with the seed question
+    as well as an optional {persona} field to fill in with a random persona from the personas dict. NOTE:
+    the system prompt must request a response from the model in JSON format and the expected format that you should
+    request from the model (by giving it as an example) is:
+    ```json
+    {
+        "1": {
+            "user": [vraag1],
+            "assistant": [antwoord op vraag1 van de gebruiker]
+        },
+        "2": {
+            "user": [vraag2],
+            "assistant": [antwoord op vraag2 van de gebruiker]
+        }
+    }
+    ```
+    We'll try to manually extract all "user": "...", "assistant": "..." pairs from the JSON response with regex for
+    a more robust solution instead of solely relying on JSON parsing.
+    If this is a file, will read its contents."""
+        ),
+    ],
     config_name: Annotated[
         Optional[str],
         Option(help="optional config name for the dataset"),
     ] = None,
     split: Annotated[
         Optional[list[str]],
-        Option(help="optional splits for the dataset. If not given, all splits will be translated"),
+        Option(help="optional splits for the dataset. If not given, all splits will be answered"),
     ] = None,
     revision: Annotated[
         Optional[str],
@@ -59,39 +87,21 @@ def translate(
             " profiles in a cyclical manner to optimize API calls",
         ),
     ] = None,
-    src_lang: Annotated[
+    output_column: Annotated[
+        str,
+        Option(help="column name to save the conversation to"),
+    ] = "messages",
+    personas: Annotated[
         Optional[str],
         Option(
-            help="source language to translate from. Will be used in the default system prompt or your custom prompt, see 'system_prompt'"
-        ),
-    ] = None,
-    tgt_lang: Annotated[
-        Optional[str],
-        Option(
-            help="target language to translate to. Will be used in the default system prompt or your custom prompt, see 'system_prompt'"
-        ),
-    ] = None,
-    system_prompt: Annotated[
-        Optional[str],
-        Option(
-            help="optional system prompt to use. Should be a string with optional {src_lang} and/or {tgt_lang} fields"
-            " that will be replaced with the given source and target languages. If not given, will use a default"
-            " translation prompt. Can also be a dictionary with keys column names and values system prompts for"
-            " that column, which is useful when you want to use different prompts for translating different"
-            " columns. If None is given, will also default to the basic system prompt. 'system_prompt' can also"
-            " be a file, in which case the file contents will be used as the system prompt."
-        ),
-    ] = None,
-    columns: Annotated[
-        Optional[list[str]],
-        Option(
-            help="optional list of column names to translate. Other columns will be dropped. If not given, all columns will be translated"
+            help="optional JSON file that contains persona names and their descriptions. These descriptions will "
+            "be randomly selected to generated user messages based on that persona IF the systemt_prompt has a {persona} field"
         ),
     ] = None,
     output_hub_name: Annotated[
         Optional[str],
         Option(
-            help="optional hub name to push the translated dataset to. Should start with an org or username,"
+            help="optional hub name to push the answered dataset to. Should start with an org or username,"
             " e.g. 'MyUserName/my-dataset-name'"
         ),
     ] = None,
@@ -133,17 +143,18 @@ def translate(
     ] = 1,
 ):
     """
-    Translate any dataset on the Hugging Face hub to a given language (default Dutch), optionally filtered by
-    splits and columns. Depending on the given arguments, will use either a HuggingFace conversational model or the
-    Azure API to translate the dataset. Will save the translated dataset to the given output directory. Optionally,
-    will also upload the translated dataset to the given hub name and revision.
+    Answer a column of any dataset on the Hugging Face hub, optionally filtered by split and columns. Depending on the
+    given arguments, will use either a HuggingFace conversational model or the Azure API to answer the dataset.
+    Will save the answered dataset to the given output directory. Optionally, will also upload the
+    dataset to the given hub name and revision.
     """
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
 
     if vllm_endpoint is not None and hf_model_name is None:
         raise ValueError(
-            "If vllm_endpoint is given, hf_model_name must also be given and it must correspond with model names that are running on the VLLM server"
+            "If vllm_endpoint is given, hf_model_name must also be given and it must correspond with model names"
+            " that are running on the VLLM server"
         )
 
     if vllm_endpoint and use_vllm:
@@ -181,24 +192,24 @@ def translate(
             verbose=verbose,
         )
 
-    translator = TranslateHFDataset(
+    conversation_starter = ConversationHFDataset(
         text_generator=text_generator,
         dataset_name=dataset_name,
+        seed_column=seed_column,
+        system_prompt=system_prompt,
+        personas=personas,
+        output_column=output_column,
         config_name=config_name,
         splits=split,
         revision=revision,
-        src_lang=src_lang,
-        tgt_lang=tgt_lang,
         dout=output_directory,
-        columns=columns,
         output_hub_name=output_hub_name,
         output_hub_revision=output_hub_revision,
         merge_with_original=True,
-        system_prompt=system_prompt,
         verbose=verbose,
     )
 
     if hf_model_name:
-        return translator.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
+        return conversation_starter.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
     else:
-        return translator.process_dataset(max_tokens=max_tokens)
+        return conversation_starter.process_dataset(max_tokens=max_tokens)

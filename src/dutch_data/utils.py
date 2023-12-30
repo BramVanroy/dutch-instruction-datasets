@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Iterable, TypeVar
+from typing import Any, Iterable, Literal, TypeVar
 
 from openai.types.chat import ChatCompletion
 from transformers import Conversation
@@ -36,6 +36,7 @@ class Response:
     result: str | ChatCompletion | None | Conversation = None
     text_response: str | None = None
     error: Exception | None = None
+    finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = None
 
     def __hash__(self):
         return hash((self.job_idx, str(self.text_response)))

@@ -105,12 +105,16 @@ class AzureQuerier:
             )
         )
 
-    def _query_api(self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], **kwargs) -> Response:
+    def _query_api(
+        self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], json_mode: bool = False, **kwargs
+    ) -> Response:
         """
         Query the Azure OpenAI API. This is mostly intended for internal use (because it requires having an index and
         converting the messages into the required format), but can be used externally as well.
         :param messages: tuple of messages where the first item is the index of the job, and the
         second item is a tuple of tuples of key/value pairs, to be transformed back into a dict, e.g. ("role", "user")
+        :param json_mode: whether to return the response in json mode or text mode. If JSON mode, the response will
+        be serialized as a string with json.dumps.
         :param kwargs: any keyword arguments to pass to the API
         :return: Response object with results and/or potential errors
         """
@@ -137,6 +141,7 @@ class AzureQuerier:
             "result": None,
             "text_response": None,
             "error": None,
+            "finish_reason": None,
         }
 
         try:
@@ -147,7 +152,10 @@ class AzureQuerier:
             ):
                 with attempt:
                     completion = client.chat.completions.create(
-                        model=client.azure_deployment, messages=messages, **kwargs
+                        model=client.azure_deployment,
+                        messages=messages,
+                        response_format={"type": "json_object" if json_mode else "text"},
+                        **kwargs,
                     )
         except BadRequestError as exc:
             response["error"] = ContentFilterException(
@@ -164,8 +172,8 @@ class AzureQuerier:
         else:
             choice = completion.choices[0]
             response["result"] = completion
-            # Sometimes it seems that the model returns an empty completion, but the finish reason is
-            # "content_filter". In this case, we should not retry, but return the empty completion.
+            response["finish_reason"] = choice.finish_reason
+
             if choice.finish_reason == "content_filter":
                 if self.verbose:
                     print(
@@ -191,19 +199,25 @@ class AzureQuerier:
         return Response(**response)
 
     def query_messages(
-        self, messages: list[ChatCompletionMessageParam] | tuple[int, list[ChatCompletionMessageParam]], **kwargs
+        self,
+        messages: list[ChatCompletionMessageParam] | tuple[int, list[ChatCompletionMessageParam]],
+        json_mode: bool = False,
+        **kwargs,
     ) -> Response:
         """
         Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
         :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
+        :param json_mode: whether to return the response in json mode or text mode. If JSON mode, the response will
+        be serialized as a string with json.dumps.
         :param kwargs: any keyword arguments to pass to the API
         :return: Response object with results and/or potential errors
         """
-        return next(self.query_list_of_messages([messages], **kwargs))
+        return next(self.query_list_of_messages([messages], json_mode=json_mode, **kwargs))
 
     def query_list_of_messages(
         self,
         list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
+        json_mode: bool = False,
         return_in_order: bool = True,
         **kwargs,
     ) -> Generator[Response, None, None]:
@@ -211,6 +225,8 @@ class AzureQuerier:
         Query the Azure OpenAI API with a list of messages.
         :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
         but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
+        :param json_mode: whether to return the response in json mode or text mode. If JSON mode, the response will
+        be serialized as a string with json.dumps.
         :param return_in_order: whether to return the results in the order of the input
         :param kwargs: any keyword arguments to pass to the API
         :return: a generator of Response objects
@@ -237,17 +253,16 @@ class AzureQuerier:
 
         if self.max_workers < 2:
             for idx_and_messages in list_of_messages:
-                yield self._query_api(idx_and_messages, **kwargs)
+                yield self._query_api(idx_and_messages, json_mode=json_mode, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
-                    executor.submit(self._query_api, idx_and_messages, **kwargs)
+                    executor.submit(self._query_api, idx_and_messages, json_mode=json_mode, **kwargs)
                     for idx_and_messages in list_of_messages
                 ]
 
                 yielder = futures if return_in_order else as_completed(futures)
                 for future in yielder:
-                    # Should trigger an exception here if the future failed inside self.query_messages
                     yield future.result()
 
     @classmethod
