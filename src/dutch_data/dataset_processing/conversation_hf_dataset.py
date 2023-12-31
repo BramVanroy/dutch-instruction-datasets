@@ -157,9 +157,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
                 for answer_response, chosen_persona in (
                     pbar := tqdm(
-                        zip(self.text_generator.batch_query_messages(messages, **kwargs),
-                            chosen_personas
-                            ),
+                        zip(self.text_generator.batch_query_messages(messages, **kwargs), chosen_personas),
                         total=len(messages),
                     )
                 ):
@@ -213,16 +211,8 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
         output_datasets = {}
         for split_name, split_group in df.groupby("split"):
             done_subset_idxs = sorted(split_group["idx"].unique())
-            split_group = split_group.drop(columns=["split"])
-            print(split_group)
-            # Pivot so that we get the expected output format
-            # Also sort by the index (rows sorted like the original dataset) and then by column name
-            split_group = (
-                split_group.pivot(index="idx", columns=["column"], values=[pivot_column])
-                .sort_index()
-                .sort_index(axis=1)
-                .fillna("")
-            )
+            split_group = split_group.drop(columns=["column", "split"]).fillna("").set_index("idx").sort_index()
+
             if self.verbose:
                 print("Unmerged results:")
                 print(split_group.head(3))
@@ -232,7 +222,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                     self.output_column: [
                         {"content": Value(dtype="string", id=None), "role": Value(dtype="string", id=None)}
                     ],
-                    "persona": Value(dtype="string", id=None)
+                    "persona": Value(dtype="string", id=None),
                 }
             )
             split_ds = Dataset.from_pandas(split_group, features=features, preserve_index=False)
@@ -273,16 +263,21 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
             messages.append(
                 (
                     sample_idx,
-                    ([
-                        {
-                            "role": "system",
-                            "content": self.system_prompt.format(
-                                persona=chosen_description, subject=sample[self.seed_column]
-                            ),
-                        }
-                        if "{persona}" in self.system_prompt
-                        else {"role": "system", "content": self.system_prompt.format(subject=sample[self.seed_column])}
-                    ]),
+                    (
+                        [
+                            {
+                                "role": "system",
+                                "content": self.system_prompt.format(
+                                    persona=chosen_description, subject=sample[self.seed_column]
+                                ),
+                            }
+                            if "{persona}" in self.system_prompt
+                            else {
+                                "role": "system",
+                                "content": self.system_prompt.format(subject=sample[self.seed_column]),
+                            }
+                        ]
+                    ),
                 )
             )
 
