@@ -4,7 +4,7 @@ from pathlib import Path
 from random import choice
 
 from dutch_data import AzureTextGenerator
-from dutch_data.azure_utils.utils import extract_conversation_from_json
+from dutch_data.azure_utils.utils import extract_conversation_from_json, extract_conversation_from_string
 from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
@@ -16,23 +16,27 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
     :param seed_column: column name of the dataset to use as seed question
     :param system_prompt: system prompt that has the {subject} field to fill in with the seed question
     as well as an optional {persona} field to fill in with a random persona from the personas dict. NOTE:
-    the system prompt must request a response from the model in JSON format and the expected format that you should
-    request from the model (by giving it as an example) is:
-    ```json
-    {
-        "1": {
-            "user": [vraag1],
-            "assistant": [antwoord op vraag1 van de gebruiker]
-        },
-        "2": {
-            "user": [vraag2],
-            "assistant": [antwoord op vraag2 van de gebruiker]
-        }
-    }
-    ```
-    We'll try to manually extract all "user": "...", "assistant": "..." pairs from the JSON response with regex for
-    a more robust solution instead of solely relying on JSON parsing.
-    If this is a file, will read its contents.
+    the system prompt must request the expected format, e.g., the system prompt could include an example like so:
+
+        Example output:
+
+        ```
+        user: [first user message]
+        assistant: [reply to the first user message
+
+        user: [second user message]
+        assistant: [reply to the second user message]
+        ```
+
+    We'll try to manually extract all "user": "...", "assistant": "..." pairs from the model response so make sure to
+    correctly specify the user_id and assistant_id fields below (in the example above that would 'user: ' and
+    'assistant: '). If you want to use a persona, make sure to include the {persona} field in the system prompt.
+
+    If the given system_prompt is a file, we will read its contents.
+    :param user_id: id description of the user. Make sure to include colons or other characters that are
+    part of the identifier. E.g., 'user: '. Must be part of system prompt.
+    :param assistant_id: id description of the assistant. Make sure to include colons or other characters that are
+    part of the identifier. E.g., 'assistant: '. Must be part of system prompt.
     :param personas: optional personas to use with the system_prompt. If a string, expects a json file
     with a dictionary of personas. If a dictionary, expects a dictionary of personas.
     :param output_column: column name to save the conversation to
@@ -40,11 +44,14 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
     seed_column: str | None = None
     system_prompt: str | None = None
+    user_id: str | None = "user: "
+    assistant_id: str | None = "assistant: "
     personas: dict[str, str] | str | None = None
     output_column: str = "messages"
 
     def __post_init__(self):
         super().__post_init__()
+
         if self.seed_column is None:
             raise ValueError("You must pass a column that contains the seed question.")
 
@@ -69,6 +76,13 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
         pfsys = Path(self.system_prompt)
         if pfsys.is_file():
             self.system_prompt = pfsys.read_text(encoding="utf-8")
+
+        if not self.user_id or self.user_id not in self.system_prompt or not self.assistant_id or self.assistant_id not in self.system_prompt:
+            raise ValueError(
+                "You must pass a user_id and assistant_id that is also given in an example output in your"
+                " system_prompt. This is necessary so that the model knows how to structure the output in terms of"
+                " the user and assistant roles."
+            )
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
@@ -106,9 +120,6 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
                 print(f"Number of messages to do: {len(messages)}")
 
-                if isinstance(self.text_generator, AzureTextGenerator):
-                    kwargs["json_mode"] = True  # Try to enforce JSON output
-
                 for answer_response in (
                     pbar := tqdm(
                         self.text_generator.batch_query_messages(messages, **kwargs),
@@ -126,8 +137,11 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                     if answer_response.error is None and answer_response.text_response is not None:
                         convo = answer_response.text_response.strip()
                         # Returns a list of dictionaries where each dictionary has 'role' and 'content' keys
-                        gen_messages = extract_conversation_from_json(convo)
-
+                        gen_messages = extract_conversation_from_string(
+                            convo,
+                            user_id=self.user_id,
+                            assistant_id=self.assistant_id,
+                        )
                         if not gen_messages:
                             result_row["error"] = "Empty conversation"
                             self._write_row_to_fh(fhout_failed, result_row)

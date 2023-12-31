@@ -23,25 +23,43 @@ def conversation(
         Argument(
             help="""system prompt that has the {subject} field to fill in with the seed question
     as well as an optional {persona} field to fill in with a random persona from the personas dict. NOTE:
-    the system prompt must request a response from the model in JSON format and the expected format that you should
-    request from the model (by giving it as an example) is:
-    ```json
-    {
-        "1": {
-            "user": [vraag1],
-            "assistant": [antwoord op vraag1 van de gebruiker]
-        },
-        "2": {
-            "user": [vraag2],
-            "assistant": [antwoord op vraag2 van de gebruiker]
-        }
-    }
-    ```
-    We'll try to manually extract all "user": "...", "assistant": "..." pairs from the JSON response with regex for
-    a more robust solution instead of solely relying on JSON parsing.
-    If this is a file, will read its contents."""
+    the system prompt must request the expected format, e.g., the system prompt could include an example like so:
+
+        Example output:
+
+        ```
+        user: [first user message]
+        assistant: [reply to the first user message
+
+        user: [second user message]
+        assistant: [reply to the second user message]
+        ```
+
+    We'll try to manually extract all "user": "...", "assistant": "..." pairs from the model response so make sure to
+    correctly specify the user_id and assistant_id fields below (in the example above that would 'user: ' and
+    'assistant: '). If you want to use a persona, make sure to include the {persona} field in the system prompt.
+
+    If the given system_prompt is a file, we will read its contents."""
         ),
     ],
+    user_id: Annotated[
+        str,
+        Option(
+            help="id description of the user. Make sure to include colons or other characters that are part of the"
+                 " identifier. E.g., 'user: '. Must be part of system prompt to give the model example output. In"
+                 " post-processing the model output we will use this info to extract messages so make sure that this"
+                 " identifier is at the start of a line in the example output."
+        ),
+    ] = "user: ",
+    assistant_id: Annotated[
+        str,
+        Option(
+            help="id description of the assistant. Make sure to include colons or other characters that are part of"
+                 " the identifier. E.g., 'assistant: '. Must be part of system prompt to give the model example output. In"
+                 " post-processing the model output we will use this info to extract messages so make sure that this"
+                 " identifier is at the start of a line in the example output."
+        ),
+    ] = "assistant: ",
     config_name: Annotated[
         Optional[str],
         Option(help="optional config name for the dataset"),
@@ -197,6 +215,8 @@ def conversation(
         dataset_name=dataset_name,
         seed_column=seed_column,
         system_prompt=system_prompt,
+        user_id=user_id,
+        assistant_id=assistant_id,
         personas=personas,
         output_column=output_column,
         config_name=config_name,
