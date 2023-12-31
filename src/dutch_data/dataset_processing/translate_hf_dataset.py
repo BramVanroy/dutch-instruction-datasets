@@ -143,8 +143,6 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                             total=len(messages),
                         )
                     ):
-                        pbar.set_description(f"{split_name} - {column_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
-
                         result_row = {
                             "split": split_name,
                             "column": lang_colname,
@@ -162,6 +160,8 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                             result_row["error"] = str(translation_response.error)
                             self._write_row_to_fh(fhout_failed, result_row)
                             num_failed += 1
+
+                        pbar.set_description(f"{split_name} - {column_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
         if translations:
             output_datasets = self._postprocess_dataset(

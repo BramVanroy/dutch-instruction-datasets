@@ -1,11 +1,14 @@
 import json
+from ast import literal_eval
 from dataclasses import dataclass
 from pathlib import Path
-from random import choice
+from random import choices
 
-from dutch_data import AzureTextGenerator
-from dutch_data.azure_utils.utils import extract_conversation_from_json, extract_conversation_from_string
+import pandas as pd
+from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets
+from dutch_data.azure_utils.utils import extract_conversation_from_string
 from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.text_generator import AzureTextGenerator
 from tqdm import tqdm
 
 
@@ -38,7 +41,8 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
     :param assistant_id: id description of the assistant. Make sure to include colons or other characters that are
     part of the identifier. E.g., 'assistant: '. Must be part of system prompt.
     :param personas: optional personas to use with the system_prompt. If a string, expects a json file
-    with a dictionary of personas. If a dictionary, expects a dictionary of personas.
+    with a dictionary of personas. If a dictionary, expects a dictionary of personas. There must be a key 'personas'
+    and there can be an optional key 'weights' to indicate the probabilities of each persona. They must sum to 1.
     :param output_column: column name to save the conversation to
     """
 
@@ -46,7 +50,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
     system_prompt: str | None = None
     user_id: str | None = "user: "
     assistant_id: str | None = "assistant: "
-    personas: dict[str, str] | str | None = None
+    personas: dict[str, dict] | str | None = None
     output_column: str = "messages"
 
     def __post_init__(self):
@@ -55,7 +59,8 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
         if self.seed_column is None:
             raise ValueError("You must pass a column that contains the seed question.")
 
-        if self.personas is None:
+        # Set personas and weights
+        if not self.personas:
             if "{persona}" in self.system_prompt:
                 raise ValueError(
                     "You must pass a dictionary of personas or a JSON file with personas if you want to use the"
@@ -70,14 +75,33 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                 )
             self.personas = json.loads(pfpersonas.read_text(encoding="utf-8"))
 
+        if "personas" not in self.personas:
+            raise KeyError(
+                "The 'personas' dictionary/JSON file must contain a 'personas' key and" " optionally a 'weights' key"
+            )
+
+        personas = self.personas["personas"]
+
+        if "weights" in self.personas:
+            self.weights = [float(self.personas["weights"][persona]) for persona in personas]
+        else:
+            self.weights = [1 / len(personas) for _ in personas]
+
+        self.personas = personas
+
         if self.system_prompt is None:
             raise ValueError("You must pass a system prompt.")
 
-        pfsys = Path(self.system_prompt)
+        pfsys = Path(self.system_prompt).resolve()
         if pfsys.is_file():
             self.system_prompt = pfsys.read_text(encoding="utf-8")
 
-        if not self.user_id or self.user_id not in self.system_prompt or not self.assistant_id or self.assistant_id not in self.system_prompt:
+        if (
+            not self.user_id
+            or self.user_id not in self.system_prompt
+            or not self.assistant_id
+            or self.assistant_id not in self.system_prompt
+        ):
             raise ValueError(
                 "You must pass a user_id and assistant_id that is also given in an example output in your"
                 " system_prompt. This is necessary so that the model knows how to structure the output in terms of"
@@ -97,7 +121,13 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
         pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
 
-        convos = already_done_df.to_dict(orient="records") if already_done_df is not None else []
+        convos = []
+        if already_done_df is not None:
+            # We need to deserialize our "messages" column because it contains, for each item, a list of dictionaries
+            already_done_df[self.output_column] = already_done_df[self.output_column].apply(
+                lambda item: literal_eval(item)
+            )
+            convos = already_done_df.to_dict(orient="records")
 
         with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
             for split_name, split_dataset in orig_dataset.items():
@@ -113,25 +143,31 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                     f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name}"
                 )
 
-                messages = self._prepare_messages(split_dataset, done_subset_idxs)
+                messages, chosen_personas = self._prepare_messages(split_dataset, done_subset_idxs)
 
                 if not messages:
                     continue
 
                 print(f"Number of messages to do: {len(messages)}")
 
-                for answer_response in (
+                # Return in order so that we can correctly add chosen_persona
+                # Other generators are always in order
+                if isinstance(self.text_generator, AzureTextGenerator):
+                    kwargs["return_in_order"] = True
+
+                for answer_response, chosen_persona in (
                     pbar := tqdm(
-                        self.text_generator.batch_query_messages(messages, **kwargs),
+                        zip(self.text_generator.batch_query_messages(messages, **kwargs),
+                            chosen_personas
+                            ),
                         total=len(messages),
                     )
                 ):
-                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
-
                     result_row = {
                         "split": split_name,
                         "column": self.output_column,
                         "idx": answer_response.job_idx,
+                        "persona": chosen_persona,
                     }
 
                     if answer_response.error is None and answer_response.text_response is not None:
@@ -156,11 +192,64 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                         self._write_row_to_fh(fhout_failed, result_row)
                         num_failed += 1
 
+                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
+
         if convos:
             output_datasets = self._postprocess_dataset(convos, orig_dataset, self.output_column)
             return output_datasets
         else:
             return None
+
+    def _postprocess_dataset(self, results: list[dict], orig_dataset: DatasetDict, pivot_column: str) -> DatasetDict:
+        """
+        Postprocess the results from the API and save the translated dataset to disk. Optionally upload it to the
+        Hugging Face hub.
+        :param results: a list of dictionaries, containing the processed rows
+        :param orig_dataset: an original dataset dict to potentially merge with (depending on self.merge_with_original)
+        :param pivot_column: the column to pivot the resulting rows on
+        :return: a DatasetDict with the result, optionally merged with the original
+        """
+        df = pd.DataFrame(results)
+        output_datasets = {}
+        for split_name, split_group in df.groupby("split"):
+            done_subset_idxs = sorted(split_group["idx"].unique())
+            split_group = split_group.drop(columns=["split"])
+            print(split_group)
+            # Pivot so that we get the expected output format
+            # Also sort by the index (rows sorted like the original dataset) and then by column name
+            split_group = (
+                split_group.pivot(index="idx", columns=["column"], values=[pivot_column])
+                .sort_index()
+                .sort_index(axis=1)
+                .fillna("")
+            )
+            if self.verbose:
+                print("Unmerged results:")
+                print(split_group.head(3))
+
+            features = Features(
+                {
+                    self.output_column: [
+                        {"content": Value(dtype="string", id=None), "role": Value(dtype="string", id=None)}
+                    ],
+                    "persona": Value(dtype="string", id=None)
+                }
+            )
+            split_ds = Dataset.from_pandas(split_group, features=features, preserve_index=False)
+
+            if self.merge_with_original:
+                orig_split_ds = orig_dataset[split_name].select(done_subset_idxs)
+                split_ds = concatenate_datasets([orig_split_ds, split_ds], axis=1)
+            split_ds = split_ds.select_columns(sorted(split_ds.column_names))
+            output_datasets[split_name] = split_ds
+
+        output_datasets = DatasetDict(output_datasets)
+        output_datasets.save_to_disk(self.dout)
+
+        if self.output_hub_name:
+            output_datasets.push_to_hub(self.output_hub_name, revision=self.output_hub_revision)
+
+        return output_datasets
 
     def _prepare_messages(self, dataset, done_subset_idxs):
         """
@@ -169,25 +258,32 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
         :param done_subset_idxs: subset indices that have already been done
         :return:
         """
-        persona_descriptions = list(self.personas.values())
-        messages = [
-            (
-                sample_idx,
+        personas = list(self.personas.keys())
+
+        messages = []
+        chosen_personas = []
+        for sample_idx, sample in enumerate(dataset):
+            if sample_idx in done_subset_idxs:
+                continue
+
+            chosen_persona = choices(personas, weights=self.weights, k=1)[0]
+            chosen_description = self.personas[chosen_persona]
+
+            chosen_personas.append(chosen_persona)
+            messages.append(
                 (
-                    [
+                    sample_idx,
+                    ([
                         {
                             "role": "system",
                             "content": self.system_prompt.format(
-                                persona=choice(persona_descriptions), subject=sample[self.seed_column]
+                                persona=chosen_description, subject=sample[self.seed_column]
                             ),
                         }
                         if "{persona}" in self.system_prompt
                         else {"role": "system", "content": self.system_prompt.format(subject=sample[self.seed_column])}
-                    ]
-                ),
+                    ]),
+                )
             )
-            for sample_idx, sample in enumerate(dataset)
-            if sample_idx not in done_subset_idxs
-        ]
 
-        return messages
+        return messages, chosen_personas

@@ -46,18 +46,18 @@ def conversation(
         str,
         Option(
             help="id description of the user. Make sure to include colons or other characters that are part of the"
-                 " identifier. E.g., 'user: '. Must be part of system prompt to give the model example output. In"
-                 " post-processing the model output we will use this info to extract messages so make sure that this"
-                 " identifier is at the start of a line in the example output."
+            " identifier. E.g., 'user: '. Must be part of system prompt to give the model example output. In"
+            " post-processing the model output we will use this info to extract messages so make sure that this"
+            " identifier is at the start of a line in the example output."
         ),
     ] = "user: ",
     assistant_id: Annotated[
         str,
         Option(
             help="id description of the assistant. Make sure to include colons or other characters that are part of"
-                 " the identifier. E.g., 'assistant: '. Must be part of system prompt to give the model example output. In"
-                 " post-processing the model output we will use this info to extract messages so make sure that this"
-                 " identifier is at the start of a line in the example output."
+            " the identifier. E.g., 'assistant: '. Must be part of system prompt to give the model example output. In"
+            " post-processing the model output we will use this info to extract messages so make sure that this"
+            " identifier is at the start of a line in the example output."
         ),
     ] = "assistant: ",
     config_name: Annotated[
@@ -113,7 +113,9 @@ def conversation(
         Optional[str],
         Option(
             help="optional JSON file that contains persona names and their descriptions. These descriptions will "
-            "be randomly selected to generated user messages based on that persona IF the systemt_prompt has a {persona} field"
+            "be randomly selected to generated user messages based on that persona IF the systemt_prompt has a"
+            " {persona} field. There must be a key 'personas' and there can be an optional key 'weights' to indicate"
+            " the probabilities of each persona. They must sum to 1."
         ),
     ] = None,
     output_hub_name: Annotated[
@@ -227,6 +229,7 @@ def conversation(
         output_hub_revision=output_hub_revision,
         merge_with_original=True,
         verbose=verbose,
+        max_samples=1
     )
 
     if hf_model_name:

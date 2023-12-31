@@ -1,7 +1,9 @@
 import re
 
 
-def extract_conversation_from_string(text: str, user_id: str = "user:", assistant_id: str = "assistant:", drop_last_if_not_assistant: bool = True) -> list[dict[str, str]]:
+def extract_conversation_from_string(
+    text: str, user_id: str = "user:", assistant_id: str = "assistant:", drop_last_if_not_assistant: bool = True
+) -> list[dict[str, str]]:
     """
     Extracts a conversation from a string. Assumes that the string is formatted as follows:
     ```

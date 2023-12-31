@@ -67,8 +67,6 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                         total=len(messages),
                     )
                 ):
-                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
-
                     result_row = {
                         "split": split_name,
                         "column": self.response_column,
@@ -84,6 +82,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                         result_row["error"] = str(answer_response.error)
                         self._write_row_to_fh(fhout_failed, result_row)
                         num_failed += 1
+
+                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
         if answers:
             output_datasets = self._postprocess_dataset(answers, orig_dataset, self.response_column)
