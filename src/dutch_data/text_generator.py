@@ -195,6 +195,7 @@ class AzureTextGenerator(TextGenerator):
     def query_messages(
         self,
         messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
+        *args,
         **kwargs,
     ) -> Response:
         """
@@ -204,13 +205,14 @@ class AzureTextGenerator(TextGenerator):
         :param kwargs: any keyword arguments to pass to the API
         :return: generated assistant R
         """
-        response = self.querier.query_messages(messages, **kwargs)
+        response = self.querier.query_messages(messages, *args, **kwargs)
 
         return response
 
     def batch_query_messages(
         self,
         list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
+        *args,
         return_in_order: bool = False,
         **kwargs,
     ) -> Generator[Response, None, None]:
@@ -222,7 +224,9 @@ class AzureTextGenerator(TextGenerator):
         :param kwargs: any keyword arguments to pass to the API
         :return: generator of Responses
         """
-        yield from self.querier.query_list_of_messages(list_of_messages, return_in_order=return_in_order, **kwargs)
+        yield from self.querier.query_list_of_messages(
+            list_of_messages, *args, return_in_order=return_in_order, **kwargs
+        )
 
     @classmethod
     def from_credentials(

@@ -20,7 +20,7 @@ def conversation(
     ],
     system_prompt: Annotated[
         str,
-        Argument(eva
+        Argument(
             help="""system prompt that has the {subject} field to fill in with the seed question
     as well as an optional {persona} field to fill in with a random persona from the personas dict. NOTE:
     the system prompt must request the expected format, e.g., the system prompt could include an example like so:

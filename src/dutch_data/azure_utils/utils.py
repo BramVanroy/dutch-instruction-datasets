@@ -29,22 +29,22 @@ def extract_conversation_from_string(
 
     for line in text.splitlines(keepends=True):
         if line.startswith(user_id):
-            if role:
-                messages.append({"role": role, "content": content.strip()})
+            if role and (content := content.strip()):
+                messages.append({"role": role, "content": content})
             role = "user"
             content = re.sub(rf"^{user_id}", "", line)
         elif line.startswith(assistant_id):
-            if role:
-                messages.append({"role": role, "content": content.strip()})
+            if role and (content := content.strip()):
+                messages.append({"role": role, "content": content})
             role = "assistant"
             content = re.sub(rf"^{assistant_id}", "", line)
         else:
             content += line
 
-    if role:
-        messages.append({"role": role, "content": content.strip()})
+    if role and (content := content.strip()):
+        messages.append({"role": role, "content": content})
 
-    if drop_last_if_not_assistant and messages[-1]["role"] != "assistant":
+    if messages and drop_last_if_not_assistant and messages[-1]["role"] != "assistant":
         messages = messages[:-1]
 
     return messages

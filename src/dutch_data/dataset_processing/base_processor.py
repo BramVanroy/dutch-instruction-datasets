@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from os import PathLike
@@ -194,3 +195,15 @@ class BaseHFDatasetProcessor(ABC):
         :return:
         """
         pass
+
+    @staticmethod
+    def _failed_items_check(pf_tmp_failed: Path):
+        failed_text = pf_tmp_failed.read_text(encoding="utf-8")
+
+        if "Error code: 429" in failed_text:
+            print(
+                f"Warning: your 'failed' file contains failed items that were caused by API rate or quota limits."
+                f" You may wish to remove those from the 'failed' file in the output directory, and try again.",
+                flush=True,
+                file=sys.stderr,
+            )

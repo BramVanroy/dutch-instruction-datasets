@@ -8,7 +8,6 @@ import pandas as pd
 from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets
 from dutch_data.azure_utils.utils import extract_conversation_from_string
 from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
-from dutch_data.text_generator import AzureTextGenerator
 from tqdm import tqdm
 
 
@@ -150,14 +149,9 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
                 print(f"Number of messages to do: {len(messages)}")
 
-                # Return in order so that we can correctly add chosen_persona
-                # Other generators are always in order
-                if isinstance(self.text_generator, AzureTextGenerator):
-                    kwargs["return_in_order"] = True
-
-                for answer_response, chosen_persona in (
+                for answer_response in (
                     pbar := tqdm(
-                        zip(self.text_generator.batch_query_messages(messages, **kwargs), chosen_personas),
+                        self.text_generator.batch_query_messages(messages, chosen_personas, **kwargs),
                         total=len(messages),
                     )
                 ):
@@ -165,7 +159,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                         "split": split_name,
                         "column": self.output_column,
                         "idx": answer_response.job_idx,
-                        "persona": chosen_persona,
+                        "persona": answer_response.extra_args[0],
                     }
 
                     if answer_response.error is None and answer_response.text_response is not None:
@@ -180,11 +174,11 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                             result_row["error"] = "Empty conversation"
                             self._write_row_to_fh(fhout_failed, result_row)
                             num_failed += 1
-
-                        result_row[self.output_column] = gen_messages
-                        convos.append(result_row)
-                        self._write_row_to_fh(fhout, result_row)
-                        num_done += 1
+                        else:
+                            result_row[self.output_column] = gen_messages
+                            convos.append(result_row)
+                            self._write_row_to_fh(fhout, result_row)
+                            num_done += 1
                     else:
                         result_row["error"] = str(answer_response.error)
                         self._write_row_to_fh(fhout_failed, result_row)
@@ -192,6 +186,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
 
                     pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
+        self._failed_items_check(pf_tmp_failed)
         if convos:
             output_datasets = self._postprocess_dataset(convos, orig_dataset, self.output_column)
             return output_datasets
@@ -211,6 +206,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
         output_datasets = {}
         for split_name, split_group in df.groupby("split"):
             done_subset_idxs = sorted(split_group["idx"].unique())
+            # This is different from the base because we want to keep 'personas'
             split_group = split_group.drop(columns=["column", "split"]).fillna("").set_index("idx").sort_index()
 
             if self.verbose:

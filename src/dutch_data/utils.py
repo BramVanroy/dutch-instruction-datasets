@@ -37,6 +37,7 @@ class Response:
     text_response: str | None = None
     error: Exception | None = None
     finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = None
+    extra_args: Iterable | None = None
 
     def __hash__(self):
         return hash((self.job_idx, str(self.text_response)))

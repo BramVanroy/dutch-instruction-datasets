@@ -85,6 +85,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
                     pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
+        self._failed_items_check(pf_tmp_failed)
         if answers:
             output_datasets = self._postprocess_dataset(answers, orig_dataset, self.response_column)
             return output_datasets

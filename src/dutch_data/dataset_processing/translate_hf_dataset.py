@@ -163,6 +163,7 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
 
                         pbar.set_description(f"{split_name} - {column_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
+        self._failed_items_check(pf_tmp_failed)
         if translations:
             output_datasets = self._postprocess_dataset(
                 translations,

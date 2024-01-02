@@ -106,7 +106,7 @@ class AzureQuerier:
         )
 
     def _query_api(
-        self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], json_mode: bool = False, **kwargs
+        self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], *args, json_mode: bool = False, **kwargs
     ) -> Response:
         """
         Query the Azure OpenAI API. This is mostly intended for internal use (because it requires having an index and
@@ -140,6 +140,7 @@ class AzureQuerier:
             "text_response": None,
             "error": None,
             "finish_reason": None,
+            "extra_args": args if args else None,
         }
 
         try:
@@ -199,6 +200,7 @@ class AzureQuerier:
     def query_messages(
         self,
         messages: list[ChatCompletionMessageParam] | tuple[int, list[ChatCompletionMessageParam]],
+        *args,
         json_mode: bool = False,
         **kwargs,
     ) -> Response:
@@ -210,11 +212,13 @@ class AzureQuerier:
         :param kwargs: any keyword arguments to pass to the API
         :return: Response object with results and/or potential errors
         """
-        return next(self.query_list_of_messages([messages], json_mode=json_mode, **kwargs))
+        args = [[arg] for arg in args]
+        return next(self.query_list_of_messages([messages], *args, json_mode=json_mode, **kwargs))
 
     def query_list_of_messages(
         self,
         list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
+        *args,
         json_mode: bool = False,
         return_in_order: bool = True,
         **kwargs,
@@ -229,6 +233,12 @@ class AzureQuerier:
         :param kwargs: any keyword arguments to pass to the API
         :return: a generator of Response objects
         """
+
+        for arg in args:
+            if len(arg) != len(list_of_messages):
+                raise ValueError(
+                    "Passed args must have the same size as the no. items in the batch, and be a list or tuple"
+                )
 
         if (
             not isinstance(list_of_messages, list)
@@ -250,13 +260,20 @@ class AzureQuerier:
         list_of_messages = _add_job_idx_to_messages(list_of_messages)
 
         if self.max_workers < 2:
-            for idx_and_messages in list_of_messages:
-                yield self._query_api(idx_and_messages, json_mode=json_mode, **kwargs)
+            for item_idx, idx_and_messages in enumerate(list_of_messages):
+                item_args = [arg[item_idx] for arg in args]
+                yield self._query_api(idx_and_messages, *item_args, json_mode=json_mode, **kwargs)
         else:
             with ThreadPoolExecutor(self.max_workers) as executor:
                 futures = [
-                    executor.submit(self._query_api, idx_and_messages, json_mode=json_mode, **kwargs)
-                    for idx_and_messages in list_of_messages
+                    executor.submit(
+                        self._query_api,
+                        idx_and_messages,
+                        *[arg[item_idx] for arg in args],
+                        json_mode=json_mode,
+                        **kwargs,
+                    )
+                    for item_idx, idx_and_messages in enumerate(list_of_messages)
                 ]
 
                 yielder = futures if return_in_order else as_completed(futures)
