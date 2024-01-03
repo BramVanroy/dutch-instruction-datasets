@@ -35,9 +35,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
             ):
                 raise ValueError(f"Dataset ({split} split) does not contain the user and/or system columns.")
 
-        pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
-
-        answers = already_done_df.to_dict(orient="records") if already_done_df is not None else []
+        pf_tmp, done_samples, pf_tmp_failed, failed_samples = self._load_done_failed()
 
         with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
             for split_name, split_dataset in orig_dataset.items():
@@ -46,7 +44,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
                 # Get the IDs of the examples that have already been translated or failed
                 done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
-                    already_done_df, failed_df, split_name
+                    done_samples, failed_samples, split_name
                 )
 
                 print(
@@ -75,7 +73,7 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
 
                     if answer_response.error is None and answer_response.text_response is not None:
                         result_row[self.response_column] = answer_response.text_response.strip()
-                        answers.append(result_row)
+                        done_samples.append(result_row)
                         self._write_row_to_fh(fhout, result_row)
                         num_done += 1
                     else:
@@ -86,8 +84,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                     pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
         self._failed_items_check(pf_tmp_failed)
-        if answers:
-            output_datasets = self._postprocess_dataset(answers, orig_dataset, self.response_column)
+        if done_samples:
+            output_datasets = self._postprocess_dataset(done_samples, orig_dataset, self.response_column)
             return output_datasets
         else:
             return None

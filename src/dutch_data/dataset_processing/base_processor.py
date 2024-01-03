@@ -49,7 +49,7 @@ class BaseHFDatasetProcessor(ABC):
         if self.splits is not None and isinstance(self.splits, str):
             self.splits = [self.splits]
 
-    def _load_done_failed_dfs(self) -> tuple[Path, pd.DataFrame | None, Path, pd.DataFrame | None]:
+    def _load_done_failed(self) -> tuple[Path, list[dict] | None, Path, list[dict] | None]:
         """
         Load the already done and failed dataframes from disk if they exist and are not empty
         :return: a tuple containing the path to the temporary file of results, the already done dataframe, the path
@@ -64,9 +64,9 @@ class BaseHFDatasetProcessor(ABC):
             already_done_df = pd.read_csv(pf_tmp_old, sep="\t", encoding="utf-8", dtype={"idx": int})
             already_done_df.to_json(pf_tmp, orient="records", lines=True)
 
-        already_done_df = None
+        done_samples = None
         if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
-            already_done_df = pd.read_json(pf_tmp, encoding="utf-8", dtype={"idx": int}, orient="records", lines=True)
+            done_samples = [json.loads(line) for line in pf_tmp.read_text(encoding="utf-8").splitlines()]
 
         # Failed
         pf_tmp_failed_old = self.dout.joinpath("tmp_openai_failed.tsv")
@@ -76,40 +76,40 @@ class BaseHFDatasetProcessor(ABC):
             failed_df = pd.read_csv(pf_tmp_failed_old, sep="\t", encoding="utf-8", dtype={"idx": int})
             failed_df.to_json(pf_tmp_failed, orient="records", lines=True)
 
-        failed_df = None
+        failed_samples = None
         if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
-            failed_df = pd.read_json(pf_tmp_failed, encoding="utf-8", dtype={"idx": int}, orient="records", lines=True)
+            failed_samples = [json.loads(line) for line in pf_tmp_failed.read_text(encoding="utf-8").splitlines()]
 
-        return pf_tmp, already_done_df, pf_tmp_failed, failed_df
+        return pf_tmp, done_samples, pf_tmp_failed, failed_samples
 
     @staticmethod
     def _get_done_failed_subset_idxs(
-        already_done_df, failed_df, split_filter, column_filter: str | None = None
+        done_samples: list[dict], failed_samples: list[dict], split_filter: str, column_filter: str | None = None
     ) -> tuple[set[int], int, set[int], int]:
         """
         Load the indices of the examples that have already been processed by the API or failed.
-        :param already_done_df: dataframe containing the already done examples
-        :param failed_df: dataframe containing the failed examples
+        :param done_samples: list of done samples
+        :param failed_samples: list of failed samples
         :param split_filter: split to filter on (typically "train", "validation" or "test")
         :param column_filter: an optional additional filter on the column name
         :return: a tuple containing the indices of the already done examples, the length of that set, the indices of
          the failed examples, and the length of that set
         """
 
-        def filter_dataset(df):
-            return df[
-                df["split"] == split_filter
-                if column_filter is None
-                else (df["split"] == split_filter) & (df["column"] == column_filter)
+        def filter_samples(samples: list[dict]):
+            return [
+                item
+                for item in samples
+                if item["split"] == split_filter and (not column_filter or item["column"] == column_filter)
             ]
 
         done_subset_idxs = set()
-        if already_done_df is not None:
-            done_subset_idxs = set(filter_dataset(already_done_df)["idx"].unique())
+        if done_samples:
+            done_subset_idxs = set([item["idx"] for item in filter_samples(done_samples)])
 
         failed_subset_idxs = set()
-        if failed_df is not None:
-            failed_subset_idxs = set(filter_dataset(failed_df)["idx"].unique())
+        if failed_samples is not None:
+            failed_subset_idxs = set([item["idx"] for item in filter_samples(failed_samples)])
             done_subset_idxs = done_subset_idxs.union(failed_subset_idxs)
 
         return done_subset_idxs, len(done_subset_idxs), failed_subset_idxs, len(failed_subset_idxs)

@@ -1,5 +1,4 @@
 import json
-from ast import literal_eval
 from dataclasses import dataclass
 from pathlib import Path
 from random import choices
@@ -118,15 +117,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
             if self.seed_column not in subset.column_names:
                 raise ValueError(f"Dataset ({split} split) does not contain the seed column.")
 
-        pf_tmp, already_done_df, pf_tmp_failed, failed_df = self._load_done_failed_dfs()
-
-        convos = []
-        if already_done_df is not None:
-            # We need to deserialize our "messages" column because it contains, for each item, a list of dictionaries
-            already_done_df[self.output_column] = already_done_df[self.output_column].apply(
-                lambda item: literal_eval(item)
-            )
-            convos = already_done_df.to_dict(orient="records")
+        pf_tmp, done_samples, pf_tmp_failed, failed_samples = self._load_done_failed()
 
         with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
             for split_name, split_dataset in orig_dataset.items():
@@ -134,7 +125,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                     split_dataset = split_dataset.select(range(self.max_samples))
 
                 done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
-                    already_done_df, failed_df, split_name
+                    done_samples, failed_samples, split_name
                 )
 
                 print(
@@ -176,7 +167,7 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                             num_failed += 1
                         else:
                             result_row[self.output_column] = gen_messages
-                            convos.append(result_row)
+                            done_samples.append(result_row)
                             self._write_row_to_fh(fhout, result_row)
                             num_done += 1
                     else:
@@ -187,8 +178,8 @@ class ConversationHFDataset(BaseHFDatasetProcessor):
                     pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
 
         self._failed_items_check(pf_tmp_failed)
-        if convos:
-            output_datasets = self._postprocess_dataset(convos, orig_dataset, self.output_column)
+        if done_samples:
+            output_datasets = self._postprocess_dataset(done_samples, orig_dataset, self.output_column)
             return output_datasets
         else:
             return None
