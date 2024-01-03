@@ -1,3 +1,4 @@
+import json
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -54,15 +55,30 @@ class BaseHFDatasetProcessor(ABC):
         :return: a tuple containing the path to the temporary file of results, the already done dataframe, the path
         to the temporary file of failed results, and the dataframe with failed results
         """
+        # Backwards-compatible to when we used TSV files
+        # Done
+        pf_tmp_old = self.dout.joinpath("tmp_openai_done.tsv")
+        pf_tmp = self.dout.joinpath("tmp_openai_done.jsonl")
+
+        if not pf_tmp.exists() and pf_tmp_old.exists() and pf_tmp_old.stat().st_size > 0:
+            already_done_df = pd.read_csv(pf_tmp_old, sep="\t", encoding="utf-8", dtype={"idx": int})
+            already_done_df.to_json(pf_tmp, orient="records", lines=True)
+
         already_done_df = None
-        pf_tmp = self.dout.joinpath("tmp_openai_done.tsv")
         if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
-            already_done_df = pd.read_csv(pf_tmp, sep="\t", encoding="utf-8", dtype={"idx": int})
+            already_done_df = pd.read_json(pf_tmp, encoding="utf-8", dtype={"idx": int}, orient="records", lines=True)
+
+        # Failed
+        pf_tmp_failed_old = self.dout.joinpath("tmp_openai_failed.tsv")
+        pf_tmp_failed = self.dout.joinpath("tmp_openai_failed.jsonl")
+
+        if not pf_tmp_failed.exists() and pf_tmp_failed_old.exists() and pf_tmp_failed_old.stat().st_size > 0:
+            failed_df = pd.read_csv(pf_tmp_failed_old, sep="\t", encoding="utf-8", dtype={"idx": int})
+            failed_df.to_json(pf_tmp_failed, orient="records", lines=True)
 
         failed_df = None
-        pf_tmp_failed = self.dout.joinpath("tmp_openai_failed.tsv")
         if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
-            failed_df = pd.read_csv(pf_tmp_failed, sep="\t", encoding="utf-8", dtype={"idx": int})
+            failed_df = pd.read_json(pf_tmp_failed, encoding="utf-8", dtype={"idx": int}, orient="records", lines=True)
 
         return pf_tmp, already_done_df, pf_tmp_failed, failed_df
 
@@ -126,14 +142,11 @@ class BaseHFDatasetProcessor(ABC):
     @staticmethod
     def _write_row_to_fh(fh: TextIO, row: dict):
         """
-        Write a row to a file handle. If the file handle is at the top of the file, write the header as well.
+        Write a row to a file handle as a JSON string.
         :param fh: file handle
         :param row: row to write, in dictionary format
         """
-        # Using pd for easy encoding and potential troubles with newlines and such
-        chunk_df = pd.DataFrame([row])
-        # Only write output header if we're at the top of the file
-        chunk_df.to_csv(fh, index=False, header=fh.tell() == 0, sep="\t", encoding="utf-8")
+        fh.write(f"{json.dumps(row)}\n")
         fh.flush()
 
     @abstractmethod
@@ -198,12 +211,19 @@ class BaseHFDatasetProcessor(ABC):
 
     @staticmethod
     def _failed_items_check(pf_tmp_failed: Path):
-        failed_text = pf_tmp_failed.read_text(encoding="utf-8")
+        if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
+            failed_text = pd.read_json(pf_tmp_failed, encoding="utf-8", orient="records", lines=True)
 
-        if "Error code: 429" in failed_text:
-            print(
-                f"Warning: your 'failed' file contains failed items that were caused by API rate or quota limits."
-                f" You may wish to remove those from the 'failed' file in the output directory, and try again.",
-                flush=True,
-                file=sys.stderr,
-            )
+            num_errors = 0
+            for error in failed_text["error"]:
+                if "Error code: 429" in error:
+                    num_errors += 1
+
+            if num_errors:
+                print(
+                    f"Warning: your 'failed' file contains {num_errors:,} failed items that were caused by API rate or"
+                    f" quota limits. You may wish to remove those from the 'failed' file in the output directory,"
+                    f" and try again.",
+                    flush=True,
+                    file=sys.stderr,
+                )
