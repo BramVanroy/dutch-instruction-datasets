@@ -1,6 +1,7 @@
 import json
 import sys
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -214,16 +215,25 @@ class BaseHFDatasetProcessor(ABC):
         if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
             failed_text = pd.read_json(pf_tmp_failed, encoding="utf-8", orient="records", lines=True)
 
-            num_errors = 0
+            error_counter = Counter()
             for error in failed_text["error"]:
-                if "Error code: 429" in error:
-                    num_errors += 1
+                error = error.lower()
+                if "error code: 429" in error:
+                    error_counter["rate_limit"] += 1
+                elif "empty conversation" in error:
+                    error_counter["empty"] += 1
+                elif "timed out" in error:
+                    error_counter["time_out"] += 1
 
+            num_errors = error_counter.total()
             if num_errors:
                 print(
                     f"Warning: your 'failed' file contains {num_errors:,} failed items that were caused by API rate or"
                     f" quota limits. You may wish to remove those from the 'failed' file in the output directory,"
-                    f" and try again.",
+                    f" and try again.\n"
+                    f"('error code: 429': {error_counter['rate_limit']};"
+                    f" 'empty conversation': {error_counter['empty']};"
+                    f" 'timed out': {error_counter['time_out']})",
                     flush=True,
                     file=sys.stderr,
                 )
