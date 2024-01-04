@@ -8,77 +8,20 @@ from pathlib import Path
 from typing import Generator, Iterator
 
 from dutch_data.azure_utils.credentials import Credentials
-from dutch_data.utils import Response, dict_to_tuple
-from openai import AzureOpenAI, BadRequestError
+from dutch_data.azure_utils.utils import AzureOpenAIDeployment, ContentFilterException, add_job_idx_to_messages
+from dutch_data.text_generator.base import TextGenerator
+from dutch_data.utils import Response
+from openai import BadRequestError
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_random_exponential
 from tenacity.retry import retry_if_not_exception_type
 
 
-class ContentFilterException(Exception):
-    def __init__(self, *args):
-        super().__init__(*args)
-
-
-def _add_job_idx_to_messages(
-    list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]]
-) -> tuple[tuple[int, tuple[tuple[tuple[str, str], ...], ...]], ...]:
-    """
-    Add job idxs to messages and convert into tuples (which can be serialized).
-    :param list_of_messages: a list of messages, where each message is a list of tuples of key/value pairs. So
-     basically a list of conversations, where each conversation is a list of messages
-    :return: the modified list of messages with the job idx included and converted into tuples
-    """
-    add_job_idx = not isinstance(list_of_messages[0][0], int)
-    if add_job_idx:
-        list_of_messages = tuple(
-            [
-                (
-                    job_idx,
-                    tuple(
-                        [
-                            dict_to_tuple(message_d) if isinstance(message_d, dict) else message_d
-                            for message_d in messages
-                        ]
-                    ),
-                )
-                for job_idx, messages in enumerate(list_of_messages)
-            ]
-        )
-    else:
-        list_of_messages = tuple(
-            [
-                (
-                    job_idx,
-                    tuple(
-                        [
-                            dict_to_tuple(message_d) if isinstance(message_d, dict) else message_d
-                            for message_d in messages
-                        ]
-                    ),
-                )
-                for job_idx, messages in list_of_messages
-            ]
-        )
-
-    return list_of_messages
-
-
-class AzureOpenAIDeployment(AzureOpenAI):
-    """
-    Extends the AzureOpenAI class with and additional parameter for the Azure deployment.
-    """
-
-    def __init__(self, *, azure_deployment: str, **kwargs):
-        self.azure_deployment = azure_deployment
-        super().__init__(**kwargs)
-
-
 @dataclass
-class AzureQuerier:
+class AzureTextGenerator(TextGenerator):
     """
-    Class for querying the Azure OpenAI API. If a list of clients is given, every new request will be executed
-    with the next item in the list of clients.
+    Text generator for the Azure API.
+    :param querier: AzureQuerier object to use for querying the API
     """
 
     clients: AzureOpenAIDeployment | list[AzureOpenAIDeployment]
@@ -213,11 +156,11 @@ class AzureQuerier:
         :return: Response object with results and/or potential errors
         """
         args = [[arg] for arg in args]
-        return next(self.query_list_of_messages([messages], *args, json_mode=json_mode, **kwargs))
+        return next(self.batch_query_messages([messages], *args, json_mode=json_mode, **kwargs))
 
-    def query_list_of_messages(
+    def batch_query_messages(
         self,
-        list_of_messages: list[list[ChatCompletionMessageParam]] | list[tuple[int, list[ChatCompletionMessageParam]]],
+        list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
         *args,
         json_mode: bool = False,
         return_in_order: bool = True,
@@ -227,37 +170,19 @@ class AzureQuerier:
         Query the Azure OpenAI API with a list of messages.
         :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
         but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
+        :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
+        extra_args attribute. Must be a list of lists where the sublists are of the same length as the number of items
+        in the batch.
         :param json_mode: whether to return the response in json mode or text mode. If JSON mode, the response will
         be serialized as a string with json.dumps.
         :param return_in_order: whether to return the results in the order of the input
         :param kwargs: any keyword arguments to pass to the API
         :return: a generator of Response objects
         """
+        self._verify_list_of_messages(list_of_messages)
+        self._verify_extra_args(args, list_of_messages)
 
-        for arg in args:
-            if len(arg) != len(list_of_messages):
-                raise ValueError(
-                    "Passed args must have the same size as the no. items in the batch, and be a list or tuple"
-                )
-
-        if (
-            not isinstance(list_of_messages, list)
-            or not isinstance(list_of_messages[0], (tuple, list))
-            or not isinstance(list_of_messages[0][0], (int, dict))
-        ):
-            example_input = [
-                [{"role": "system", "content": "You are a good AI"}, {"role": "user", "content": "hi"}],
-                {"role": "user", "content": "good morning"},
-            ]
-            pretty_example = json.dumps(example_input, indent=2)
-            raise ValueError(
-                f"list_of_messages is expected to be a list of conversations, where each conversation is a list of"
-                f" messages. For instance,\n{pretty_example}"
-                f"\nFor advanced use cases, you could also add job idxs yourself by passing a list of tuples of"
-                f" (job_idx, messages) where messages is still expected to be a list of dicts (or compatible)."
-            )
-
-        list_of_messages = _add_job_idx_to_messages(list_of_messages)
+        list_of_messages = add_job_idx_to_messages(list_of_messages)
 
         if self.max_workers < 2:
             for item_idx, idx_and_messages in enumerate(list_of_messages):
