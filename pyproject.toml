@@ -30,16 +30,16 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
-    "datasets",
-    "huggingface-hub",
-    "openai",
-    "pandas",
-    "tenacity",
-    "tiktoken",
-    "torch",
+    "datasets==2.16.*",
+    "huggingface-hub==0.19.*",
+    "openai==1.6.*",
+    "pandas==2.*",
+    "tenacity==8.2.*",
+    "tiktoken==0.5.*",
+    "torch==2.*",
     "tqdm",
-    "transformers",
-    "typer[all]",
+    "transformers<5",
+    "typer[all]<1",
 ]
 
 [project.urls]
@@ -48,7 +48,8 @@ documentation = "https://github.com/BramVanroy/dutch-instruction-datasets"
 repository = "https://github.com/BramVanroy/dutch-instruction-datasets.git"
 
 [project.optional-dependencies]
-dev = ["flake8", "black", "isort", "pytest"]
+dev = ["flake8", "black", "isort", "pytest", "pytest-lazy-fixture"]
+vllm = ["requests", "vllm"]
 
 [project.scripts]
 translate-hf = "dutch_data.scripts.translate_generic:app"
