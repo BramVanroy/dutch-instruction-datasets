@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Generator
+from typing import Generator
 
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response, batchify
@@ -46,20 +46,64 @@ class VLLMTextGenerator(TextGenerator):
             dtype=self.dtype,
         )
 
-    def query_messages(self, messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]], **kwargs) -> Response:
+    def query_messages(
+        self,
+        messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
+        *args,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        repetition_penalty: float = 1.0,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        top_k: int = -1,
+        max_new_tokens: int = 128,
+        batch_size: int = 16,
+        **other_gen_kwargs,
+    ) -> Response:
         """
         Query the VLLM model with a single sample of messages.
         :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
-        "content" keys, or a tuple of (job_idx, messages) where job_idx is an int
-        :param kwargs: additional kwargs to pass to the model call, which include generation parameters such as
-        'temperature', 'top_p', 'top_k', etc.
-        :return: generated assistant Response
+        "content" keys
+        :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
+        extra_args attribute
+        :param frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
+        Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
+        :param repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the
+        generated text so far. Values > 1 encourage the model to use new tokens, while values < 1 encourage
+        the model to repeat tokens.
+        :param temperature: Float that controls the randomness of the sampling. Lower values make the model more
+        deterministic, while higher values make the model more random. Zero means greedy sampling.
+        :param top_p: Float that controls the cumulative probability of the top tokens to consider. Must be in (0, 1]. Set
+        to 1 to consider all tokens.
+        :param top_k: Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.
+        :param max_new_tokens: max. number of tokens to generate
+        :param batch_size: pseudo-batch size. While VLLM does batching automatically based on available RAM,
+        we also add an option here for pseudo-batching. This is useful to get a better indication of process
+        because VLLM only returns the final list but we would like to have more frequent return values instead of
+        just at the end.
+        :param other_gen_kwargs: other generation kwargs to pass to the generate function
         """
-        return next(self.batch_query_messages([messages]), **kwargs)
+        args = [[arg] for arg in args]
+        return next(
+            self.batch_query_messages(
+                [messages],
+                presence_penalty=presence_penalty,
+                frequency_penalty=frequency_penalty,
+                repetition_penalty=repetition_penalty,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                max_new_tokens=max_new_tokens,
+                batch_size=batch_size,
+                *args,
+                **other_gen_kwargs,
+            )
+        )
 
     def batch_query_messages(
         self,
         list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
+        *args,
         use_tqdm: bool = False,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
@@ -75,8 +119,11 @@ class VLLMTextGenerator(TextGenerator):
         Query the VLLM model with the given messages. Batching will occur automatically in VLLM based on memory
         constriants. Parameter descriptions taken from the VLLM documentation.
 
-        :param list_of_messages: messages to query the model with. A list of lists of dicts where each dict must have
-        a "role" and "content" keys, or a list of tuples of (job_idx, messages) where job_idx is an int
+        :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
+        but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
+        :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
+        extra_args attribute. Must be a list of lists where the sublists are of the same length as the number of items
+        in the batch.
         :param use_tqdm: whether to use tqdm for progress bar presence_penalty: Float that penalizes new tokens based
         on whether they appear in the generated text so far. Values > 0 encourage the model to use new tokens, while
         values < 0 encourage the model to repeat tokens.
@@ -100,6 +147,9 @@ class VLLMTextGenerator(TextGenerator):
         :param other_gen_kwargs: other generation kwargs to pass to the generate function
         :return: generator of Responses
         """
+        self._verify_list_of_messages(list_of_messages)
+        self._verify_extra_args(args, list_of_messages)
+
         if isinstance(list_of_messages[0][0], int):
             job_idxs = [item[0] for item in list_of_messages]
             list_of_messages = [item[1] for item in list_of_messages]
@@ -134,155 +184,9 @@ class VLLMTextGenerator(TextGenerator):
                     "result": generated,
                     "text_response": generated_text,
                     "error": None,
+                    "extra_args": tuple([arg[item_idx] for arg in args]) if args else None,
                 }
 
                 yield Response(**response)
 
                 item_idx += 1
-
-
-@dataclass
-class VLLMServerTextGenerator(TextGenerator):
-    """
-    Text generator for the VLLM API, which will call on an endpoint URL that has an VLLM instance running.
-
-    :param model_name: name of the model to use. Must match the model that is loaded on the VLLM server.
-    :param endpoint: endpoint of the API. Note that this must be compatible with Chat Completion, as described here:
-    https://docs.vllm.ai/en/latest/getting_started/quickstart.html#using-openai-completions-api-with-vllm. So this
-    will likely be a URL like 'http://localhost:8000/v1/chat/completions'
-    :param health_endpoint: optional health endpoint to check if the API is healthy
-    """
-
-    model_name: str
-    endpoint: str
-    health_endpoint: str | None = None
-
-    @property
-    def health(self):
-        if not self.health_endpoint:
-            return None
-
-        response = requests.get(self.health_endpoint)
-        return response.ok
-
-    def query_messages(
-        self,
-        messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
-        max_new_tokens: int = 128,
-        do_sample: bool = True,
-        temperature: float = 1.0,
-        top_k: int = 50,
-        top_p: float = 1.0,
-        **kwargs,
-    ) -> Response:
-        """
-        Query the VLLM API with a single sample of messages.
-        :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
-        "content" keys
-        :param max_new_tokens: max new tokens to generate
-        :param do_sample: whether to use sampling or not
-        :param temperature: sampling temperature
-        :param top_k: k for top-k sampling
-        :param top_p: p for top-p sampling
-        :param kwargs: additional kwargs to pass to the pipeline call
-        :return: generated assistant Response
-        """
-
-        if isinstance(messages[0], int):
-            job_idx = messages[0]
-            messages = messages[1]
-        else:
-            job_idx = 0
-
-        response = {
-            "job_idx": job_idx,
-            "messages": messages,
-            "result": None,
-            "text_response": None,
-            "error": None,
-            **self._submit_request(
-                messages=messages,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                **kwargs,
-            ),
-        }
-        response = Response(**response)
-
-        return response
-
-    def batch_query_messages(
-        self,
-        list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
-        max_new_tokens: int = 128,
-        do_sample: bool = True,
-        temperature: float = 1.0,
-        top_k: int = 50,
-        top_p: float = 1.0,
-        **kwargs,
-    ) -> Generator[Response, None, None]:
-        """
-        Query the VLLM API with the given messages.
-        :param list_of_messages: messages to query the model with. A list of lists of dicts where each dict must have
-         a "role" and "content" keys
-        :param max_new_tokens: max new tokens to generate
-        :param do_sample: whether to use sampling or not
-        :param temperature: sampling temperature
-        :param top_k: k for top-k sampling
-        :param top_p: p for top-p sampling
-        :param kwargs: additional kwargs to pass to the API call
-        :return: generator of Responses
-        """
-        if isinstance(list_of_messages[0][0], int):
-            job_idxs = [item[0] for item in list_of_messages]
-            list_of_messages = [item[1] for item in list_of_messages]
-        else:
-            job_idxs = list(range(len(list_of_messages)))
-
-        for job_idx, messages in zip(job_idxs, list_of_messages):
-            response = {
-                "job_idx": job_idx,
-                "messages": messages,
-                "result": None,
-                "text_response": None,
-                "error": None,
-                **self._submit_request(
-                    messages=messages,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=do_sample,
-                    temperature=temperature,
-                    top_k=top_k,
-                    top_p=top_p,
-                    **kwargs,
-                ),
-            }
-
-            yield Response(**response)
-
-    def _submit_request(self, **kwargs) -> dict[str, Any]:
-        """
-        Submit a request to the VLLM API, populated by the given kwargs. Returns a dictionary of relevant
-        keys (that will need to be merged with others to get the original messages and job idx etc).
-        :param kwargs: kwargs to pass to the API
-        :return: a dictionary with relevant response keys such as 'result' and 'text_response', or potentially
-        'error' if something went wrong
-        """
-        payload = {
-            "model": self.model_name,
-            **kwargs,
-        }
-        response = {}
-        try:
-            completion = requests.post(
-                self.endpoint, json=payload, headers={"Content-Type": "application/json"}
-            ).json()
-            choice = completion["choices"][0]
-            response["result"] = completion
-            response["text_response"] = choice["message"]["content"]
-        except Exception as exc:
-            response["error"] = exc
-
-        return response
