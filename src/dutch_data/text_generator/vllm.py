@@ -62,10 +62,13 @@ class VLLMTextGenerator(TextGenerator):
     ) -> Response:
         """
         Query the VLLM model with a single sample of messages.
+
         :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
         "content" keys
         :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
         extra_args attribute
+        :param presence_penalty: Float that penalizes new tokens based on whether they appear in the generated text
+        so far. Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
         :param frequency_penalty: Float that penalizes new tokens based on their frequency in the generated text so far.
         Values > 0 encourage the model to use new tokens, while values < 0 encourage the model to repeat tokens.
         :param repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the

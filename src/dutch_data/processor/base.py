@@ -224,6 +224,7 @@ class DatasetProcessor(ABC):
                     file=sys.stderr,
                 )
 
+
 @dataclass
 class DatasetGenerator(DatasetProcessor, ABC):
     """
@@ -232,6 +233,7 @@ class DatasetGenerator(DatasetProcessor, ABC):
     :param text_generator: text generator to use for querying. This can be a HuggingFace pipeline, an Azure pipeline,
     or any other TextGenerator subclass that implements the `query_messages` and `batch_query_messages` methods
     """
+
     text_generator: TextGenerator | None = None
 
     def __post_init__(self):

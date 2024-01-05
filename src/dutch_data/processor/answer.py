@@ -24,12 +24,13 @@ class AnswerGenerator(DatasetGenerator):
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
-        if self.response_column in orig_dataset.column_names:
-            raise ValueError(
-                f"Dataset already contains a column called '{self.response_column}'. Please choose another name."
-            )
 
         for split, subset in orig_dataset.items():
+            if self.response_column in subset.column_names:
+                raise ValueError(
+                    f"Dataset already contains a column called '{self.response_column}'. Please choose another name."
+                )
+
             if self.user_column not in subset.column_names or (
                 self.system_column and self.system_column not in subset.column_names
             ):

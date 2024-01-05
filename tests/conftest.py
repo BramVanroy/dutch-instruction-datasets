@@ -1,12 +1,11 @@
 from pathlib import Path
 from typing import Literal
 
-
+import datasets
 import openai
 import pytest
 import torch
 import transformers
-import datasets
 from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
 from dutch_data.text_generator.vllm import VLLM_AVAILABLE
@@ -17,11 +16,12 @@ from pytest_lazyfixture import lazy_fixture
 
 transformers.logging.set_verbosity_error()
 datasets.logging.set_verbosity_error()
+datasets.logging.disable_progress_bar()
 
 
-
-
-def _create_completion(finish_reason: Literal["content_filter", "exception", "stop"] = "stop", text: str | None = None):
+def _create_completion(
+    finish_reason: Literal["content_filter", "exception", "stop"] = "stop", text: str | None = None
+):
     if finish_reason == "stop":
         text = text if text else "Life is complicated. I do not know what it means."
     else:

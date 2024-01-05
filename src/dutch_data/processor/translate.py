@@ -93,13 +93,14 @@ class TranslationGenerator(DatasetGenerator):
         if self.columns is not None:
             orig_dataset = orig_dataset.select_columns(self.columns)
 
-        if isinstance(self.system_prompt, dict) and any(
-            column not in self.system_prompt for column in orig_dataset.column_names
-        ):
-            raise ValueError(
-                "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
-                " ('columns')."
-            )
+        for split, subset in orig_dataset.items():
+            if isinstance(self.system_prompt, dict) and any(
+                column not in self.system_prompt for column in subset.column_names
+            ):
+                raise ValueError(
+                    "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
+                    " ('columns')."
+                )
 
         return orig_dataset
 

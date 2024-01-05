@@ -5,8 +5,8 @@ from random import choices
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets
-from dutch_data.utils import extract_conversation_from_string
 from dutch_data.processor.base import DatasetGenerator
+from dutch_data.utils import extract_conversation_from_string
 from tqdm import tqdm
 
 
@@ -108,12 +108,13 @@ class ConversationGenerator(DatasetGenerator):
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
-        if self.output_column in orig_dataset.column_names:
-            raise ValueError(
-                f"Dataset already contains a column called '{self.output_column}'. Please choose another name."
-            )
 
         for split, subset in orig_dataset.items():
+            if self.output_column in subset.column_names:
+                raise ValueError(
+                    f"Dataset already contains a column called '{self.output_column}'. Please choose another name."
+                )
+
             if self.seed_column not in subset.column_names:
                 raise ValueError(f"Dataset ({split} split) does not contain the seed column.")
 
