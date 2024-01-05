@@ -1,4 +1,5 @@
 from pathlib import Path
+from subprocess import Popen
 
 import openai
 import pytest
@@ -6,19 +7,13 @@ import torch
 import transformers
 from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
-from dutch_data.text_generator.vllm import VLLM_AVAILABLE, VLLMServerTextGenerator
+from dutch_data.text_generator.vllm import VLLM_AVAILABLE
 from openai.types.chat.chat_completion import ChatCompletion, Choice
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from pytest_lazyfixture import lazy_fixture
 
 
 transformers.logging.set_verbosity_error()
-
-
-def pytest_addoption(parser):
-    parser.addoption(
-        "--vllm_server_endpoint", action="store", default=None, help="endpoint URL that VLLM server is running on"
-    )
 
 
 def _create_completion(finish_reason: str):
@@ -100,33 +95,16 @@ def hf_generator():
     return TEXT_GENERATORS["huggingface"]
 
 
-@pytest.fixture(params=["serverless", "server"])
-def vllm_generator(request):
-    if request.param == "serverless":
-        if VLLM_AVAILABLE:
-            if "vllm_serverless" not in TEXT_GENERATORS:
-                TEXT_GENERATORS["vllm_serverless"] = VLLMTextGenerator(
-                    "microsoft/DialoGPT-small", tensor_parallel_size=torch.cuda.device_count()
-                )
-            yield TEXT_GENERATORS["vllm_serverless"]
-        else:
-            pytest.skip("VLLM not installed. Skipping it in tests.")
-    elif request.param == "server":
-        vllm_endpoint = request.config.getoption("--vllm_server_endpoint")
-        if vllm_endpoint is None:
-            pytest.skip(
-                "VLLM server endpoint not specified in CLI with '--vllm_server_endpoint'. Skipping it in tests."
+@pytest.fixture
+def vllm_generator():
+    if VLLM_AVAILABLE:
+        if "vllm" not in TEXT_GENERATORS:
+            TEXT_GENERATORS["vllm"] = VLLMTextGenerator(
+                "microsoft/DialoGPT-small", tensor_parallel_size=torch.cuda.device_count()
             )
-        else:
-            servered_vllm = VLLMServerTextGenerator(
-                "microsoft/DialoGPT-small",
-            )
-            if servered_vllm.health:
-                if "vllm_server" not in TEXT_GENERATORS:
-                    TEXT_GENERATORS["vllm_server"] = servered_vllm
-                yield TEXT_GENERATORS["vllm_server"]
-            else:
-                pytest.skip(f"VLLM server at endpoint '{vllm_endpoint}' not healthy. Skipping it in tests.")
+        return TEXT_GENERATORS["vllm"]
+    else:
+        pytest.skip("VLLM not installed. Skipping it in tests.")
 
 
 @pytest.fixture(params=[lazy_fixture("vllm_generator"), lazy_fixture("hf_generator"), lazy_fixture("azure_generator")])

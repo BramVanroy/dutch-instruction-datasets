@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.processor.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
 

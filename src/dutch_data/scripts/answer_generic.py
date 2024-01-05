@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 
 import torch
 import typer
-from dutch_data.dataset_processing import AnswerHFDataset
+from dutch_data.processor import AnswerHFDataset
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator, VLLMTextGenerator
 from typer import Argument, Option
 

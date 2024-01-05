@@ -6,7 +6,7 @@ from random import choices
 import pandas as pd
 from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets
 from dutch_data.azure_utils.utils import extract_conversation_from_string
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.processor.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
 

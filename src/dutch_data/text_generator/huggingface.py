@@ -56,7 +56,7 @@ class HFTextGenerator(TextGenerator):
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 1.0,
-        **kwargs,
+        **other_gen_kwargs,
     ) -> Response:
         """
         Query the model with a single sample of messages.
@@ -69,42 +69,22 @@ class HFTextGenerator(TextGenerator):
         :param temperature: sampling temperature
         :param top_k: k for top-k sampling
         :param top_p: p for top-p sampling
-        :param kwargs: additional kwargs to pass to the pipeline call
+        :param other_gen_kwargs: additional kwargs to pass to the pipeline call
         :return: generated assistant Response
         """
-
-        if isinstance(messages[0], int):
-            job_idx = messages[0]
-            messages = messages[1]
-        else:
-            job_idx = 0
-
-        response = {
-            "job_idx": job_idx,
-            "messages": messages,
-            "result": None,
-            "text_response": None,
-            "error": None,
-            "extra_args": args if args else None,
-        }
-        try:
-            conversation = self.pipe(
-                messages,
+        args = [[arg] for arg in args]
+        return next(
+            self.batch_query_messages(
+                [messages],
+                *args,
                 max_new_tokens=max_new_tokens,
                 do_sample=do_sample,
                 temperature=temperature,
                 top_k=top_k,
                 top_p=top_p,
-                **kwargs,
+                **other_gen_kwargs,
             )
-            response["result"] = conversation
-            response["text_response"] = conversation.messages[-1]["content"]
-        except Exception as exc:
-            response["error"] = exc
-
-        response = Response(**response)
-
-        return response
+        )
 
     def batch_query_messages(
         self,
@@ -116,7 +96,7 @@ class HFTextGenerator(TextGenerator):
         top_k: int = 50,
         top_p: float = 1.0,
         batch_size: int = 1,
-        **kwargs,
+        **other_gen_kwargs,
     ) -> Generator[Response, None, None]:
         """
         Query the model with the given messages.
@@ -131,7 +111,7 @@ class HFTextGenerator(TextGenerator):
         :param top_k: k for top-k sampling
         :param top_p: p for top-p sampling
         :param batch_size: batch size for the pipeline
-        :param kwargs: additional kwargs to pass to the pipeline call
+        :param other_gen_kwargs: additional kwargs to pass to the pipeline call
         :return: generator of Responses
         """
         self._verify_list_of_messages(list_of_messages)
@@ -139,7 +119,7 @@ class HFTextGenerator(TextGenerator):
 
         if isinstance(list_of_messages[0][0], int):
             job_idxs = [item[0] for item in list_of_messages]
-            list_of_messages = [item[1] for item in list_of_messages]
+            list_of_messages: list[list[dict[str, str]]] = [item[1] for item in list_of_messages]  # noqa
         else:
             job_idxs = list(range(len(list_of_messages)))
 
@@ -157,7 +137,7 @@ class HFTextGenerator(TextGenerator):
                     top_k=top_k,
                     top_p=top_p,
                     batch_size=batch_size,
-                    **kwargs,
+                    **other_gen_kwargs,
                 ),
             )
         ):

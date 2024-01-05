@@ -40,6 +40,7 @@ dependencies = [
     "tqdm",
     "transformers<5",
     "typer[all]<1",
+    'vllm==0.2.* ; platform_system != "Windows"'  # Windows currently not supported
 ]
 
 [project.urls]

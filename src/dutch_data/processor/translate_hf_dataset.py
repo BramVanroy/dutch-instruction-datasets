@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datasets import DatasetDict
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.processor.base_processor import BaseHFDatasetProcessor
 from tqdm import tqdm
 
 

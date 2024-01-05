@@ -12,7 +12,6 @@ from dutch_data.azure_utils.utils import AzureOpenAIDeployment, ContentFilterExc
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response
 from openai import BadRequestError
-from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_random_exponential
 from tenacity.retry import retry_if_not_exception_type
 
@@ -21,7 +20,6 @@ from tenacity.retry import retry_if_not_exception_type
 class AzureTextGenerator(TextGenerator):
     """
     Text generator for the Azure API.
-    :param querier: AzureQuerier object to use for querying the API
     """
 
     clients: AzureOpenAIDeployment | list[AzureOpenAIDeployment]
@@ -142,14 +140,17 @@ class AzureTextGenerator(TextGenerator):
 
     def query_messages(
         self,
-        messages: list[ChatCompletionMessageParam] | tuple[int, list[ChatCompletionMessageParam]],
+        messages: list[dict[str, str]] | tuple[int, list[dict[str, str]]],
         *args,
         json_mode: bool = False,
         **kwargs,
     ) -> Response:
         """
         Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
-        :param messages: a single conversation, so a list of turns (typically dictionaries) to send to the API
+        :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
+        "content" keys
+        :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
+        extra_args attribute
         :param json_mode: whether to return the response in json mode or text mode. If JSON mode, the response will
         be serialized as a string with json.dumps.
         :param kwargs: any keyword arguments to pass to the API
