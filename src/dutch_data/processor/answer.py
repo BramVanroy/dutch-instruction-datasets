@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.processor.base import DatasetGenerator
 from tqdm import tqdm
 
 
 @dataclass
-class AnswerHFDataset(BaseHFDatasetProcessor):
+class AnswerGenerator(DatasetGenerator):
     """
     Answers a HuggingFace dataset using the Azure OpenAI API.
     :param user_column: which column contains the user's message
-    :param system_column: which column contains the system's message
+    :param system_column: (optional) which column contains the system's message
     :param response_column: which column to write answers to
     """
 
@@ -96,8 +96,8 @@ class AnswerHFDataset(BaseHFDatasetProcessor):
                 sample_idx,
                 (
                     [
-                        {"role": "user", "content": sample[self.user_column]},
                         {"role": "system", "content": sample[self.system_column]},
+                        {"role": "user", "content": sample[self.user_column]},
                     ]
                     if self.system_column
                     else [{"role": "user", "content": sample[self.user_column]}]

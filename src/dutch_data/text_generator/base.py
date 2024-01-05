@@ -9,11 +9,11 @@ from dutch_data.utils import Response
 @dataclass
 class TextGenerator(ABC):
     @abstractmethod
-    def query_messages(self, messages, **kwargs) -> Response:
+    def query_messages(self, messages, *args, **kwargs) -> Response:
         raise NotImplementedError
 
     @abstractmethod
-    def batch_query_messages(self, list_of_messages, **kwargs) -> Generator[Response, None, None]:
+    def batch_query_messages(self, list_of_messages, *args, **kwargs) -> Generator[Response, None, None]:
         raise NotImplementedError
 
     @staticmethod

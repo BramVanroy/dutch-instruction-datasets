@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datasets import DatasetDict
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.processor.base import DatasetGenerator
 from tqdm import tqdm
 
 
@@ -38,19 +38,21 @@ def build_translation_system_prompt(
 
 
 @dataclass
-class TranslateHFDataset(BaseHFDatasetProcessor):
+class TranslationGenerator(DatasetGenerator):
     """
-    Translates a HuggingFace dataset using the Azure OpenAI API.
+    Translates a HuggingFace dataset. Translations are written to "{column_name}_{tgt_lang.lower()}" if tgt_lang is
+    given, otherwise to "{column_name}_translated".
+
     :param src_lang: source language that the texts are in (can be used in the prompt template)
     :param tgt_lang: target language to translate to (can be used in the prompt template)
     :param columns: optional list of column names to translate. Other columns will be dropped. If not given,
     all columns will be translated
     :param system_prompt: system prompt or system prompt template. Can optionally have "{src_lang}" and/or "{tgt_lang}"
-     fields that will be replaced with the given source and target languages. If not given, will use a default
-     translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
-     which is useful when you want to use different prompts for translating different columns. If None is given, will
-     also default to the basic system prompt. 'system_prompt' can also be a file, in which case the file contents will
-     be used as the system prompt.
+    fields that will be replaced with the given source and target languages. If not given, will use a default
+    translation prompt. Can also be a dictionary with keys column names and values system prompts for that column,
+    which is useful when you want to use different prompts for translating different columns. If None is given, will
+    also default to the basic system prompt. 'system_prompt' can also be a file, in which case the file contents will
+    be used as the system prompt.
     """
 
     src_lang: str | None = None
@@ -69,11 +71,11 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                 self.system_prompt = pfprompt.read_text(encoding="utf-8")
         except OSError:
             # Can occur when the system prompt is a very long string, in which case pathlib
-            # will raise a OSError "File name too long"
+            # will raise a OSError "File name too long". In that case it's likely not a file
             pass
 
-        promp_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
-        for prompt in promp_tests:
+        prompt_tests = [self.system_prompt] if isinstance(self.system_prompt, str) else self.system_prompt.values()
+        for prompt in prompt_tests:
             if ("{src_lang}" in prompt and self.src_lang is None) or (
                 "{tgt_lang}" in prompt and self.tgt_lang is None
             ):
@@ -90,10 +92,6 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
         orig_dataset: DatasetDict = super()._load_dataset()
         if self.columns is not None:
             orig_dataset = orig_dataset.select_columns(self.columns)
-        return orig_dataset
-
-    def process_dataset(self, **kwargs):
-        orig_dataset = self._load_dataset()
 
         if isinstance(self.system_prompt, dict) and any(
             column not in self.system_prompt for column in orig_dataset.column_names
@@ -102,6 +100,11 @@ class TranslateHFDataset(BaseHFDatasetProcessor):
                 "When passing a dictionary as 'system_prompt', it must have a key for each column to translate"
                 " ('columns')."
             )
+
+        return orig_dataset
+
+    def process_dataset(self, **kwargs):
+        orig_dataset = self._load_dataset()
 
         pf_tmp, done_samples, pf_tmp_failed, failed_samples = self._load_done_failed()
 

@@ -5,13 +5,13 @@ from random import choices
 
 import pandas as pd
 from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets
-from dutch_data.azure_utils.utils import extract_conversation_from_string
-from dutch_data.dataset_processing.base_processor import BaseHFDatasetProcessor
+from dutch_data.utils import extract_conversation_from_string
+from dutch_data.processor.base import DatasetGenerator
 from tqdm import tqdm
 
 
 @dataclass
-class ConversationHFDataset(BaseHFDatasetProcessor):
+class ConversationGenerator(DatasetGenerator):
     """
     Build a conversation from a HuggingFace dataset.
     :param seed_column: column name of the dataset to use as seed question

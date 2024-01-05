@@ -1,5 +1,5 @@
 from dutch_data.utils import dict_to_tuple
-from openai import AzureOpenAI
+from openai.lib.azure import AzureOpenAI
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 
 

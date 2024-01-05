@@ -1,3 +1,3 @@
-from .answer_hf_dataset import AnswerHFDataset
-from .conversation_hf_dataset import ConversationHFDataset
-from .translate_hf_dataset import SYSTEM_TRANSLATION_PROMPT, TranslateHFDataset
+from .answer import AnswerGenerator
+from .conversation import ConversationGenerator
+from .translate import SYSTEM_TRANSLATION_PROMPT, TranslationGenerator

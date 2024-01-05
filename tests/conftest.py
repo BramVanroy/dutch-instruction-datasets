@@ -1,9 +1,11 @@
 from pathlib import Path
+from typing import Literal
 
 import openai
 import pytest
 import torch
 import transformers
+import datasets
 from dutch_data.azure_utils.credentials import Credentials
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
 from dutch_data.text_generator.vllm import VLLM_AVAILABLE, VLLMServerTextGenerator
@@ -13,6 +15,7 @@ from pytest_lazyfixture import lazy_fixture
 
 
 transformers.logging.set_verbosity_error()
+datasets.logging.set_verbosity_error()
 
 
 def pytest_addoption(parser):
@@ -21,7 +24,12 @@ def pytest_addoption(parser):
     )
 
 
-def _create_completion(finish_reason: str):
+def _create_completion(finish_reason: Literal["content_filter", "exception", "stop"] = "stop", text: str | None = None):
+    if finish_reason == "stop":
+        text = text if text else "Life is complicated. I do not know what it means."
+    else:
+        text = None
+
     return ChatCompletion(
         id="random-id",
         choices=[
@@ -30,9 +38,7 @@ def _create_completion(finish_reason: str):
                 logprobs=None,
                 index=0,
                 message=ChatCompletionMessage(
-                    content=None
-                    if finish_reason == "content_filter"
-                    else "Life is complicated. I do not know what it means.",
+                    content=text,
                     role="assistant",
                 ),
             )
@@ -57,13 +63,13 @@ def mock_openai_completions_create(monkeypatch):
         input_text = kwargs["messages"][0]["content"]
 
         # Mocked response based on input_text
-        if input_text == "stop":
-            return _create_completion("stop")
-        elif input_text == "content_filter":
+        if input_text == "content_filter":
             return _create_completion("content_filter")
         elif input_text == "exception":
             # Mocked exception - always raise an exception
             raise Exception("Mocked exception")
+        else:  # In case of "stop" or any other input
+            return _create_completion("stop", text=input_text)
 
     # Patch the API call with the mock
     monkeypatch.setattr(openai.resources.chat.completions.Completions, "create", mock_create)

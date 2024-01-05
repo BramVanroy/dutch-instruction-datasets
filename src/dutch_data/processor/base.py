@@ -13,12 +13,10 @@ from dutch_data.text_generator import TextGenerator
 
 
 @dataclass
-class BaseHFDatasetProcessor(ABC):
+class DatasetProcessor(ABC):
     """
     Base class for processing HuggingFace datasets.
     :param dataset_name: dataset name compatible with HuggingFace datasets
-    :param text_generator: text generator to use for querying. This can be a HuggingFace pipeline, an Azure pipeline,
-    or any other TextGenerator subclass that implements the `query_messages` method
     :param dout: output directory to save the translated dataset to. Temporary progress will also be saved here
     :param config_name: optional config name for the dataset
     :param splits: optional split or list of splits for the dataset. If not given, all splits will be translated
@@ -33,7 +31,6 @@ class BaseHFDatasetProcessor(ABC):
     """
 
     dataset_name: str
-    text_generator: TextGenerator
     dout: PathLike | str
     config_name: str | None = None
     splits: list[str] | str | None = None
@@ -65,7 +62,7 @@ class BaseHFDatasetProcessor(ABC):
             already_done_df = pd.read_csv(pf_tmp_old, sep="\t", encoding="utf-8", dtype={"idx": int})
             already_done_df.to_json(pf_tmp, orient="records", lines=True)
 
-        done_samples = None
+        done_samples = []
         if pf_tmp.exists() and pf_tmp.stat().st_size > 0:
             done_samples = [json.loads(line) for line in pf_tmp.read_text(encoding="utf-8").splitlines()]
 
@@ -77,7 +74,7 @@ class BaseHFDatasetProcessor(ABC):
             failed_df = pd.read_csv(pf_tmp_failed_old, sep="\t", encoding="utf-8", dtype={"idx": int})
             failed_df.to_json(pf_tmp_failed, orient="records", lines=True)
 
-        failed_samples = None
+        failed_samples = []
         if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
             failed_samples = [json.loads(line) for line in pf_tmp_failed.read_text(encoding="utf-8").splitlines()]
 
@@ -199,17 +196,6 @@ class BaseHFDatasetProcessor(ABC):
 
         return output_datasets
 
-    @abstractmethod
-    def _prepare_messages(self, *args, **kwargs) -> list[tuple[int, list[dict[[str, str]]]]]:
-        """
-        Prepare the messages to send to the API. This should return a list of tuples, where each tuple contains
-        the job index and a list of messages to send to the API (which are dictionaries).
-        :param args:
-        :param kwargs:
-        :return:
-        """
-        pass
-
     @staticmethod
     def _failed_items_check(pf_tmp_failed: Path):
         if pf_tmp_failed.exists() and pf_tmp_failed.stat().st_size > 0:
@@ -237,3 +223,29 @@ class BaseHFDatasetProcessor(ABC):
                     flush=True,
                     file=sys.stderr,
                 )
+
+@dataclass
+class DatasetGenerator(DatasetProcessor, ABC):
+    """
+    Base class for generating datasets based on other Hugging Face datasets.
+
+    :param text_generator: text generator to use for querying. This can be a HuggingFace pipeline, an Azure pipeline,
+    or any other TextGenerator subclass that implements the `query_messages` and `batch_query_messages` methods
+    """
+    text_generator: TextGenerator | None = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.text_generator is None:
+            raise ValueError("You must pass a text generator.")
+
+    @abstractmethod
+    def _prepare_messages(self, *args, **kwargs) -> list[tuple[int, list[dict[[str, str]]]]]:
+        """
+        Prepare the messages. This should return a list of tuples, where each tuple contains
+        the job index and a list of messages to send to the API (which are dictionaries).
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        pass
