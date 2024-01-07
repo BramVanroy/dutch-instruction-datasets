@@ -53,7 +53,7 @@ class DatasetProcessor(ABC):
         :return: a tuple containing the path to the temporary file of results, the already done dataframe, the path
         to the temporary file of failed results, and the dataframe with failed results
         """
-        # Backwards-compatible to when we used TSV files
+        # Backwards-compatible with TSV form because we used to use TSV files
         # Done
         pf_tmp_old = self.dout.joinpath("tmp_openai_done.tsv")
         pf_tmp = self.dout.joinpath("tmp_openai_done.jsonl")
