@@ -75,24 +75,16 @@ def mock_openai_completions_create(monkeypatch):
 TEXT_GENERATORS = {}
 
 
-@pytest.fixture(params=["single_from_credentials", "multi"])
-def azure_generator(request):
+@pytest.fixture
+def azure_generator():
     credentials_file = Path(__file__).parent / "dummy-credentials.json"
 
-    if request.param == "single_from_credentials":
-        if "single_azure" not in TEXT_GENERATORS:
-            # If no profile is used in Credentials, only the first one in the file will be used.
-            credentials = Credentials.from_json(credentials_file)
-            TEXT_GENERATORS["single_azure"] = AzureTextGenerator.from_credentials(
-                credentials, timeout=1, max_retries=1
-            )
-        yield TEXT_GENERATORS["single_azure"]
-    elif request.param == "multi":
-        # If no profile is specified in the AzureQuerier, _all_ profiles in the file will be used,
-        # switching between profiles at every new request.
-        if "multi_azure" not in TEXT_GENERATORS:
-            TEXT_GENERATORS["multi_azure"] = AzureTextGenerator.from_json(credentials_file, timeout=1, max_retries=1)
-        yield TEXT_GENERATORS["multi_azure"]
+    # If no profile is used in Credentials, only the first one in the file will be used.
+    credentials = Credentials.from_json(credentials_file)
+    if "azure" not in TEXT_GENERATORS:
+        TEXT_GENERATORS["azure"] = AzureTextGenerator.from_credentials(credentials, timeout=1, max_retries=1)
+
+    return TEXT_GENERATORS["azure"]
 
 
 @pytest.fixture

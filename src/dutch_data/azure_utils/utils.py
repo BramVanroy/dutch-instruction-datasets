@@ -59,4 +59,11 @@ class AzureOpenAIDeployment(AzureOpenAI):
 
     def __init__(self, *, azure_deployment: str, **kwargs):
         self.azure_deployment = azure_deployment
+
+        if "max_retries" in kwargs and kwargs["max_retries"] < 0:
+            raise ValueError("max_retries must be at least 0")
+
+        if "timeout" in kwargs and kwargs["timeout"] < 0:
+            raise ValueError("timeout must be at least 0")
+
         super().__init__(**kwargs)

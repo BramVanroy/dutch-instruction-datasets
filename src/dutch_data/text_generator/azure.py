@@ -224,12 +224,6 @@ class AzureTextGenerator(TextGenerator):
         :param verbose: whether to print more information of the API responses
         :return: Initialized AzureQuerier object
         """
-        if max_retries < 1:
-            raise ValueError("max_retries must be at least 1")
-
-        if timeout < 1:
-            raise ValueError("timeout must be at least 1")
-
         client = AzureOpenAIDeployment(
             **asdict(credentials),
             max_retries=max_retries,
@@ -257,12 +251,6 @@ class AzureTextGenerator(TextGenerator):
         :param max_workers: maximum number of workers for multi-threaded querying
         :param verbose: whether to print more information of the API responses
         """
-        if max_retries < 1:
-            raise ValueError("max_retries must be at least 1")
-
-        if timeout < 1:
-            raise ValueError("timeout must be at least 1")
-
         pfcredentials_file = Path(credentials_file).resolve()
 
         if not pfcredentials_file.exists():
@@ -275,7 +263,7 @@ class AzureTextGenerator(TextGenerator):
             credentials_profiles = [credentials_profiles]
 
         if any(profile not in credentials for profile in credentials_profiles):
-            raise ValueError(
+            raise KeyError(
                 f"Not all profiles ({credentials_profiles}) are present in the credentials file."
                 f" Available profiles: {list(credentials.keys())}"
             )

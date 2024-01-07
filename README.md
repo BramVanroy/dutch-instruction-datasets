@@ -87,6 +87,15 @@ Example usage:
 answer-hf --help
 ```
 
+## TODO
+
+- [ ] Add separate test for Azure Generator:
+  - [ ] Test different scenarios (exception, stop, content filter...)
+- [ ] Add support for OpenAI API (not Azure)
+- [ ] Add tests for conversation
+- [ ] Add tests for translation
+- [ ] Add filtering/post-processing
+
 
 ## License
 
