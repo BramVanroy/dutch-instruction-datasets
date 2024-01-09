@@ -70,8 +70,10 @@ def main():
         lens_after = [len(df.index) for df in dfs_splits]
 
         if lens_before != lens_after:
-            print(f"Removed duplicate entries on the merge_on columns from all datasets."
-                  f" Sizes before: {lens_before}, sizes after: {lens_after}")
+            print(
+                f"Removed duplicate entries on the merge_on columns from all datasets."
+                f" Sizes before: {lens_before}, sizes after: {lens_after}"
+            )
 
         merged_df = reduce(lambda df1, df2: df1.merge(df2, on=merge_on_cols), dfs_splits)
         required_cols = [c for c in merged_df.columns if c not in merge_on_cols]

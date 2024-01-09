@@ -1,22 +1,29 @@
 import sys
-from datasets import Dataset, DatasetDict, load_dataset
-from huggingface_hub import HfApi
-from huggingface_hub.utils import RepositoryNotFoundError
-from InquirerPy import inquirer
 
 import fasttext
-from huggingface_hub import hf_hub_download
+from datasets import Dataset, DatasetDict, load_dataset
+from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.utils import RepositoryNotFoundError
+from InquirerPy import inquirer
 
 
 def identify_language(row, column_name: str, model):
     text = row[column_name]
+
+    # When this is a conversation column with lists of dictionaries of the type {"content": ..., "role"}
+    # we just glue everything together
+    if isinstance(text, list):
+        text = " ".join(msg["content"] for msg in text)
+
+    text = text.replace("\n", " ")
+    text = " ".join(text.split())
     if text is None:
         return None
 
-    label, prob = model.predict(text, k=1)[0]
+    label, prob = model.predict(text, k=1)
+    label = label[0]
 
-    return {f"{column_name}_lid": label.replace("__label__", ""),
-            f"{column_name}_lid_prob": prob.item()}
+    return {f"{column_name}_lid": label.replace("__label__", ""), f"{column_name}_lid_prob": prob.item()}
 
 
 def main():
@@ -62,13 +69,8 @@ def main():
         ).execute()
 
         for col in lid_cols:
-            split_ds = split_ds.map(
-                lambda row: identify_language(row, col, model),
-                num_proc=8,
-            )
-
-        output_dataset[split_name] = Dataset.from_pandas(split_ds)
-
+            split_ds = split_ds.map(lambda row: identify_language(row, col, model), keep_in_memory=True)
+        output_dataset[split_name] = split_ds
     output_dataset = DatasetDict(output_dataset)
 
     while True:

@@ -40,7 +40,7 @@ dependencies = [
     "tqdm",
     "transformers<5",
     "typer[all]<1",
-    'vllm==0.2.* ; platform_system != "Windows"'  # Windows currently not supported
+
 ]
 
 [project.urls]
@@ -50,14 +50,16 @@ repository = "https://github.com/BramVanroy/dutch-instruction-datasets.git"
 
 [project.optional-dependencies]
 dev = ["flake8", "black", "isort", "pytest", "pytest-lazy-fixture"]
-vllm = ["vllm"]
+vllm = ['vllm==0.2.* ; platform_system != "Windows"']  # Windows currently not supported]
 fasttext = ["fasttext"]
+all = ["dutch_data[dev]", "dutch_data[vllm]", "dutch_data[fasttext]"]
 
 [project.scripts]
 translate-hf = "dutch_data.scripts.translate_generic:app"
 answer-hf = "dutch_data.scripts.answer_generic:app"
 conversation-hf = "dutch_data.scripts.conversation_generic:app"
 interactive-query = "dutch_data.scripts.interactive_querying:app"
+interactive-lid = "dutch_data.scripts.add_lid:main"
 
 # TOOLS
 [tool.setuptools]
