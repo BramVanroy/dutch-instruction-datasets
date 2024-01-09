@@ -1,1 +1,1 @@
-from .text_generator import AzureTextGenerator, TextGenerator, HFTextGenerator, VLLMTextGenerator
+from .text_generator import AzureTextGenerator, HFTextGenerator, TextGenerator, VLLMTextGenerator
