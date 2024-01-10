@@ -60,6 +60,7 @@ answer-hf = "dutch_data.scripts.answer_generic:app"
 conversation-hf = "dutch_data.scripts.conversation_generic:app"
 interactive-query = "dutch_data.scripts.interactive_querying:app"
 interactive-lid = "dutch_data.scripts.add_lid:main"
+interactive-filter-dutch = "dutch_data.scripts.filter_dutch:main"
 
 # TOOLS
 [tool.setuptools]
