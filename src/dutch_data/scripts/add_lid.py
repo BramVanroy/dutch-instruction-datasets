@@ -1,7 +1,7 @@
 import sys
 
 import fasttext
-from datasets import Dataset, DatasetDict, load_dataset
+from datasets import DatasetDict, load_dataset
 from huggingface_hub import HfApi, hf_hub_download
 from huggingface_hub.utils import RepositoryNotFoundError
 from InquirerPy import inquirer
