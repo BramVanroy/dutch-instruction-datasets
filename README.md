@@ -3,8 +3,6 @@
 In this repository scripts are provided to build your own instruction dataset through OpenAI services. We specifically
 make use of Azure services.
 
-NOTE: this is a work in progress. The scripts are prone to change so do not use this in production. They are also not
-as heavily optimized as I would like them to be: they do not support batching, for example. 
 
 ## Usage
 
@@ -87,16 +85,68 @@ Example usage:
 answer-hf --help
 ```
 
-## TODO
-
-- [ ] Add separate test for Azure Generator:
-  - [ ] Test different scenarios (exception, stop, content filter...)
-- [ ] Add support for OpenAI API (not Azure)
-- [ ] Add tests for conversation
-- [ ] Add tests for translation
-- [ ] Add filtering/post-processing
+### `conversation-hf`
 
 
+
+### `interactive-lid`
+
+An interactive script to add language identification to specified columns in your dataset.
+The script handles `messages` (lists of dictionaries) by simply concatenating all content keys.
+
+The script will add `{colname}_lid` and `{colname}_lid_prob` columns to your dataset.
+
+Usage: simply run `interactive-lid` and follow instructions.
+
+
+### `interactive-filter-dutch`
+
+An interactive script to filter out non-Dutch messages from your dataset. It does so based on the columns
+added with `interactive-lid` so that script should be used first.
+
+In addition to language filtering, it also allows you to filter out messages with specific characteristics. Text matching occurs in a case-insensitive manner.
+
+- messages with non-Roman characters are removed (every character must have "LATIN" in its unicode name; note that this solution is not flawless: https://stackoverflow.com/a/3308844/1150683)
+This is a very strict filter and will lead to the removal of data that you may have wanted to keep (e.g. messages that involve a translation task to non-Latin script languages)
+- messages that are not identified as Dutch and that are longer than three white-space separated tokens are removed
+- any text containing "spijt me", "spijt mij", "sorry", "mijn excuses", because those often indicate that the system could not successfully reply to a request
+- any text containing "It seems like there was a typo", "assistant", because those often indicate that the system could not successfully reply to a request. Note that `assistant` is the English word (`assistent` is Dutch), so when `assistant` appears something is likely wrong
+- any text indicating knowledge cut-offs:
+    - kennisafsluiting in 2023 
+    - kennisstop in 2023 
+    - kennisafsnijdatum van 2023 
+    - cutoff in 2023 
+    - Tot mijn kennis die bijgewerkt is tot begin 2023 
+    - Voor zover mijn kennis reikt tot 2023 
+    - Vanaf mijn kennis tot begin 2023 
+    - As of my last update in 2023
+- any text referencing other language models
+    - ChatGPT
+    - Chat GPT
+    - GPT3
+    - GPT 3
+    - gpt-3
+    - gpt-3.5-turbo
+    - GPT4
+    - GPT 4
+    - gpt-4
+    - gpt-4-turbo
+    - OpenAI
+    - ShareGPT
+- any self-referencing text about being a language model. This often indicates that a model is not capable of a specific task, in case we drop those samples to instead focus on the tasks that it can do.
+The following strings are matched in a template for all occurrences of "als [een] {}", "ben [een] {}", "{} ben"
+    - AI-assistent
+    - AI-gebaseerde assistent
+    - virtuele assistent
+    - digitale assistent
+    - tekst-assistent
+    - AI tekstgebaseerde asssistent
+    - tekstgebaseerde asssistent
+    - assistent
+    - taalmodel
+    - AI-taalmodel
+    - AI taalmodel
+    - 
 ## License
 
 Licensed under [GPLv3](LICENSE). 
