@@ -76,7 +76,9 @@ This will:
 ### `answer-hf`
 
 In the next step we want to use models or APIs to generate an answer to given columns. This script will do that for
-you. It will also save intermediate results and can simply restart where it left off.
+you. The only required input that is used is the given `user-column` as the user message, optionally a `system-column`,
+and the model answer to those will be saved into the `response-column` (defautls to `response`).
+
 
 
 Example usage:
@@ -87,7 +89,23 @@ answer-hf --help
 
 ### `conversation-hf`
 
+This script allows you to build a conversation in a single model response. Importantly, the specified system_prompt is
+supposed to tell the model to create a multi-turn conversation and also give an example of such a conversation, with
+specified identifiers for the user and assistant in the generated conversation. These identifiers should also be given in
+this script (defaults to `user: ` and `assistant: `).
 
+You can also specifiy personas with `--personas` which should be a JSON file containinga main key `personas` with
+persona names and their descriptions, which can then be passed to the system_prompt as long as it has a `{persona}`
+field in its text. The JSON file can optionally also have a `weights` key, which indicates how randomly weighted
+the different personas are chosen. If not given, all personas are equally likely. To repeat: when you provide a 
+`personas` file, the persona descriptions will be randomly selected for each sample (optionally weighted) and
+plugged into the system_prompt that you provided as long as that text (file) contains the string `{persona}`.
+
+Example usage:
+
+```shell
+answer-hf --help
+```
 
 ### `interactive-lid`
 
