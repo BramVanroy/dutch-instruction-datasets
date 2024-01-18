@@ -2,8 +2,8 @@ from typing import Annotated, Optional
 
 import torch
 import typer
-from dutch_data.processor.translate_hf_dataset import TranslateHFDataset
-from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMServerTextGenerator, VLLMTextGenerator
+from dutch_data.processor.translate import TranslationGenerator
+from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
 from typer import Argument, Option
 
 
@@ -30,15 +30,6 @@ def translate(
         Optional[str],
         Option(
             help="HuggingFace model name to use for the text generator. Note that currently only conversational style models are supported"
-        ),
-    ] = None,
-    vllm_endpoint: Annotated[
-        Optional[str],
-        Option(
-            help="VLLM endpoint to send requests to, if you have a VLLM server running. Note that this must be"
-            " compatible with Chat Completion, as described here: https://docs.vllm.ai/en/latest/getting_started/quickstart.html#using-openai-completions-api-with-vllm."
-            "So this will likely be a URL like 'http://localhost:8000/v1/chat/completions'. Make sure to also"
-            " pass in 'hf_model_name', which must match the model that is loaded on the VLLM server."
         ),
     ] = None,
     use_vllm: Annotated[
@@ -141,26 +132,11 @@ def translate(
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
 
-    if vllm_endpoint is not None and hf_model_name is None:
-        raise ValueError(
-            "If vllm_endpoint is given, hf_model_name must also be given and it must correspond with model names that are running on the VLLM server"
-        )
-
-    if vllm_endpoint and use_vllm:
-        raise ValueError(
-            "'vllm_endpoint' and 'use_vllm' cannot be used at the same time. The former is necessary when you are"
-            " accessing an endpoint URL of an already running VLLM server. The latter is intended so that the VLLM"
-            " library will be called from within Python, without accessing a running API server, in conjunction"
-            " with a specificied 'hf_model_name'"
-        )
-
     if use_vllm and not hf_model_name:
         raise ValueError("When using 'use_vllm', a model name 'hf_model_name' must be specified")
 
     if hf_model_name:
-        if vllm_endpoint is not None:
-            text_generator = VLLMServerTextGenerator(hf_model_name, vllm_endpoint)
-        elif use_vllm:
+        if use_vllm:
             num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
             text_generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
         else:
@@ -181,7 +157,7 @@ def translate(
             verbose=verbose,
         )
 
-    translator = TranslateHFDataset(
+    translator = TranslationGenerator(
         text_generator=text_generator,
         dataset_name=dataset_name,
         config_name=config_name,
