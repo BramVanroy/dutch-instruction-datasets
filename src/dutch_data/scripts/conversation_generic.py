@@ -153,10 +153,14 @@ def conversation(
     ] = 1,
 ):
     """
-    Answer a column of any dataset on the Hugging Face hub, optionally filtered by split and columns. Depending on the
+    Start a conversation from a column of any dataset on the Hugging Face hub Depending on the
     given arguments, will use either a HuggingFace conversational model or the Azure API to answer the dataset.
     Will save the answered dataset to the given output directory. Optionally, will also upload the
     dataset to the given hub name and revision.
+
+    It requires a system_prompt that indicates what to do with the seed_column (the given column that use as a starting
+    point). The system prompt is expected to indicate that the model should generate a conversation with user and assistant IDs.
+    This format will then be parsed to ultimately extract the conversation from the model output.
     """
     if hf_model_name is None and credentials_file is None:
         raise ValueError("Either hf_model_name or credentials_file must be given")
