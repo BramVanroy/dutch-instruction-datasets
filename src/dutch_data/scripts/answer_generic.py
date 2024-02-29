@@ -62,6 +62,11 @@ def answer(
         Optional[str],
         Option(help="optional system column that will be included as a system message"),
     ] = None,
+    system_message: Annotated[
+        Optional[str],
+        Option(help="optional system message. Cannot be used if 'system_column' is given. If a file path is given,"
+               " the content of the file will be used as the system message"),
+    ] = None,
     output_hub_name: Annotated[
         Optional[str],
         Option(
@@ -145,6 +150,7 @@ def answer(
         dataset_name=dataset_name,
         user_column=user_column,
         system_column=system_column,
+        system_message=system_message,
         config_name=config_name,
         splits=split,
         revision=revision,

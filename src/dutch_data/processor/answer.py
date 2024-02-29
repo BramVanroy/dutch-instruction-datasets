@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from os import PathLike
+from pathlib import Path
 
 from dutch_data.processor.base import DatasetGenerator
 from tqdm import tqdm
@@ -10,17 +12,32 @@ class AnswerGenerator(DatasetGenerator):
     Answers a HuggingFace dataset using the Azure OpenAI API.
     :param user_column: which column contains the user's message
     :param system_column: (optional) which column contains the system's message
+    :param system_message: (optional) a system message to use for all examples. If a file path is given, the content
+    of the file will be used as the system message
     :param response_column: which column to write answers to
     """
 
     user_column: str | None = None
     system_column: str | None = None
+    system_message: str | PathLike | None = None
     response_column: str = "response"
 
     def __post_init__(self):
         super().__post_init__()
         if self.user_column is None:
             raise ValueError("You must pass a column that contains the user messages.")
+
+        if self.system_column and self.system_message:
+            raise ValueError("You cannot pass both a system column and a system message.")
+
+        if self.system_message:
+            try:
+                pfsys = Path(self.system_message)
+                if pfsys.exists() and pfsys.is_file():
+                    self.system_message = pfsys.read_text(encoding="utf-8")
+            except Exception:
+                # Can error for very long strings
+                pass
 
     def process_dataset(self, **kwargs):
         orig_dataset = self._load_dataset()
@@ -92,18 +109,28 @@ class AnswerGenerator(DatasetGenerator):
             return None
 
     def _prepare_messages(self, dataset, done_subset_idxs):
-        messages = [
-            (
-                sample_idx,
-                (
+        def build_message(sample, sample_idx):
+            if self.system_column:
+                return (
+                    sample_idx,
                     [
                         {"role": "system", "content": sample[self.system_column]},
                         {"role": "user", "content": sample[self.user_column]},
-                    ]
-                    if self.system_column
-                    else [{"role": "user", "content": sample[self.user_column]}]
-                ),
-            )
+                    ],
+                )
+            elif self.system_message:
+                return (
+                    sample_idx,
+                    [
+                        {"role": "system", "content": self.system_message},
+                        {"role": "user", "content": sample[self.user_column]},
+                    ],
+                )
+            else:
+                return sample_idx, [{"role": "user", "content": sample[self.user_column]}]
+
+        messages = [
+            build_message(sample, sample_idx)
             for sample_idx, sample in enumerate(dataset)
             if sample_idx not in done_subset_idxs
         ]
