@@ -64,8 +64,10 @@ def answer(
     ] = None,
     system_message: Annotated[
         Optional[str],
-        Option(help="optional system message. Cannot be used if 'system_column' is given. If a file path is given,"
-               " the content of the file will be used as the system message"),
+        Option(
+            help="optional system message. Cannot be used if 'system_column' is given. If a file path is given,"
+            " the content of the file will be used as the system message"
+        ),
     ] = None,
     output_hub_name: Annotated[
         Optional[str],
@@ -105,7 +107,7 @@ def answer(
     ] = False,
     torch_dtype: Annotated[
         Optional[str],
-        Option(help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
+        Option(help="(hf/use_vllm) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
     ] = None,
     batch_size: Annotated[
         int,
@@ -128,11 +130,12 @@ def answer(
 
     if use_vllm and not hf_model_name:
         raise ValueError("When using 'use_vllm', a model name 'hf_model_name' must be specified")
-
     if hf_model_name:
         if use_vllm:
             num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
-            text_generator = VLLMTextGenerator(model_name=hf_model_name, tensor_parallel_size=num_devices)
+            text_generator = VLLMTextGenerator(
+                model_name=hf_model_name, tensor_parallel_size=num_devices, dtype=torch_dtype
+            )
         else:
             text_generator = HFTextGenerator(
                 hf_model_name,
