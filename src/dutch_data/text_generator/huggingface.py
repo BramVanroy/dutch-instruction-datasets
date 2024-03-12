@@ -38,11 +38,8 @@ class HFTextGenerator(TextGenerator):
             self.torch_dtype = getattr(torch, self.torch_dtype)
 
         model_kwargs = {
-            "device_map": self.device_map,
             "load_in_8bit": self.load_in_8bit,
             "load_in_4bit": self.load_in_4bit,
-            "torch_dtype": self.torch_dtype,
-            "trust_remote_code": self.trust_remote_code,
         }
 
         if self.use_flash_attention:
@@ -53,15 +50,24 @@ class HFTextGenerator(TextGenerator):
                 "conversational",
                 model=self.model_name,
                 model_kwargs=model_kwargs,
+                trust_remote_code=self.trust_remote_code,
+                device_map=self.device_map,
+                torch_dtype=self.torch_dtype,
             )
-        except TypeError:
-            logging.error("Flash attention not supported by model. Retrying without flash attention...")
-            model_kwargs.pop("attn_implementation", None)
-            self.pipe = pipeline(
-                "conversational",
-                model=self.model_name,
-                model_kwargs=model_kwargs,
-            )
+        except TypeError as exc:
+            if self.use_flash_attention:
+                logging.error("Flash attention not supported by model. Retrying without flash attention...")
+                model_kwargs.pop("attn_implementation", None)
+                self.pipe = pipeline(
+                    "conversational",
+                    model=self.model_name,
+                    model_kwargs=model_kwargs,
+                    trust_remote_code=self.trust_remote_code,
+                    device_map=self.device_map,
+                    torch_dtype=self.torch_dtype,
+                )
+            else:
+                raise exc
 
         if self.chat_template is not None:
             self.pipe.tokenizer.chat_template = self.chat_template

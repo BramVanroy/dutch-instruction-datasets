@@ -99,9 +99,7 @@ def answer(
     load_in_4bit: Annotated[
         bool, Option(help="(hf) whether to load the model in 4bit precision to save memory")
     ] = False,
-    use_flash_attention: Annotated[
-        bool, Option(help="(hf) whether to use flash attention 2")
-    ] = False,
+    use_flash_attention: Annotated[bool, Option(help="(hf) whether to use flash attention 2")] = False,
     trust_remote_code: Annotated[
         bool, Option(help="(hf) whether to trust remote code - this may be required to run some newer models")
     ] = False,
@@ -134,7 +132,10 @@ def answer(
         if use_vllm:
             num_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
             text_generator = VLLMTextGenerator(
-                model_name=hf_model_name, tensor_parallel_size=num_devices, dtype=torch_dtype
+                model_name=hf_model_name,
+                tensor_parallel_size=num_devices,
+                dtype=torch_dtype,
+                trust_remote_code=trust_remote_code,
             )
         else:
             text_generator = HFTextGenerator(
