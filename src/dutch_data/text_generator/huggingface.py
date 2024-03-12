@@ -63,7 +63,8 @@ class HFTextGenerator(TextGenerator):
             model = AutoModelForCausalLM.from_config(config, **model_kwargs)
 
         model = load_checkpoint_and_dispatch(model, self.model_name, device_map=self.device_map)
-
+        model.eval()
+        
         tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             trust_remote_code=self.trust_remote_code,
@@ -136,6 +137,7 @@ class HFTextGenerator(TextGenerator):
             )
         )
 
+    @torch.inference_mode()
     def batch_query_messages(
         self,
         list_of_messages: list[list[dict[str, str]]] | list[tuple[int, list[dict[str, str]]], ...],
