@@ -3,9 +3,18 @@ from dataclasses import dataclass, field
 from typing import Generator, Literal
 
 import torch
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response
-from transformers import Conversation, Pipeline, pipeline, AutoTokenizer
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    Conversation,
+    Pipeline,
+    pipeline,
+)
 
 
 @dataclass
@@ -37,13 +46,23 @@ class HFTextGenerator(TextGenerator):
         if self.torch_dtype is not None and self.torch_dtype != "auto":
             self.torch_dtype = getattr(torch, self.torch_dtype)
 
+        config = AutoConfig.from_pretrained(
+            self.model_name,
+            trust_remote_code=self.trust_remote_code,
+        )
+        bnb_config = BitsAndBytesConfig(load_in_8bit=self.load_in_8bit, load_in_4bit=self.load_in_4bit)
         model_kwargs = {
-            "load_in_8bit": self.load_in_8bit,
-            "load_in_4bit": self.load_in_4bit,
+            "quantization_config": bnb_config,
+            "trust_remote_code": self.trust_remote_code,
         }
 
         if self.use_flash_attention:
             model_kwargs["attn_implementation"] = "flash_attention_2"
+
+        with init_empty_weights():
+            model = AutoModelForCausalLM.from_config(config, **model_kwargs)
+
+        model = load_checkpoint_and_dispatch(model, self.model_name, device_map=self.device_map)
 
         tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
@@ -52,7 +71,7 @@ class HFTextGenerator(TextGenerator):
         try:
             self.pipe = pipeline(
                 "conversational",
-                model=self.model_name,
+                model=model,
                 tokenizer=tokenizer,
                 model_kwargs=model_kwargs,
                 trust_remote_code=self.trust_remote_code,
