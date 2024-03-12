@@ -97,6 +97,12 @@ def answer(
     load_in_4bit: Annotated[
         bool, Option(help="(hf) whether to load the model in 4bit precision to save memory")
     ] = False,
+    use_flash_attention: Annotated[
+        bool, Option(help="(hf) whether to use flash attention 2")
+    ] = False,
+    trust_remote_code: Annotated[
+        bool, Option(help="(hf) whether to trust remote code - this may be required to run some newer models")
+    ] = False,
     torch_dtype: Annotated[
         Optional[str],
         Option(help="(hf) data type to use for the model, e.g. 'bfloat16' or 'auto'"),
@@ -133,7 +139,9 @@ def answer(
                 device_map=device_map,
                 load_in_8bit=load_in_8bit,
                 load_in_4bit=load_in_4bit,
+                use_flash_attention=use_flash_attention,
                 torch_dtype=torch_dtype,
+                trust_remote_code=trust_remote_code,
             )
     else:
         text_generator = AzureTextGenerator.from_json(

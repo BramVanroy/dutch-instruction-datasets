@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from typing import Generator, Literal
 
@@ -15,6 +16,8 @@ class HFTextGenerator(TextGenerator):
     :param device_map: device map to use for the pipeline
     :param load_in_8bit: whether to load the model in 8bit precision to save memory
     :param load_in_4bit: whether to load the model in 4bit precision to save memory
+    :param use_flash_attention: whether to use the flash attention implementation
+    :param trust_remote_code: whether to trust remote code or not. Required for some (newer) models
     :param torch_dtype: data type to use for the model, e.g. 'float16' or 'auto'
     :param chat_template: Jinja template to use for the chat if you want to overwrite the default template that comes
     with a given model. See https://huggingface.co/transformers/main_classes/pipelines.html#transformers.ConversationalPipeline
@@ -24,6 +27,8 @@ class HFTextGenerator(TextGenerator):
     device_map: dict[str, str | int | torch.device] | str | int | torch.device = None
     load_in_8bit: bool = False
     load_in_4bit: bool = False
+    use_flash_attention: bool = False
+    trust_remote_code: bool = False
     torch_dtype: torch.dtype | Literal["auto"] | str | None = None
     chat_template: str | None = None
     pipe: Pipeline = field(default=None, init=False)
@@ -37,12 +42,26 @@ class HFTextGenerator(TextGenerator):
             "load_in_8bit": self.load_in_8bit,
             "load_in_4bit": self.load_in_4bit,
             "torch_dtype": self.torch_dtype,
+            "trust_remote_code": self.trust_remote_code,
         }
-        self.pipe = pipeline(
-            "conversational",
-            model=self.model_name,
-            model_kwargs=model_kwargs,
-        )
+
+        if self.use_flash_attention:
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+
+        try:
+            self.pipe = pipeline(
+                "conversational",
+                model=self.model_name,
+                model_kwargs=model_kwargs,
+            )
+        except TypeError:
+            logging.error("Flash attention not supported by model. Retrying without flash attention...")
+            model_kwargs.pop("attn_implementation", None)
+            self.pipe = pipeline(
+                "conversational",
+                model=self.model_name,
+                model_kwargs=model_kwargs,
+            )
 
         if self.chat_template is not None:
             self.pipe.tokenizer.chat_template = self.chat_template
