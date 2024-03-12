@@ -30,6 +30,8 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
+    "accelerate==0.25.*",
+    "bitsandbytes==0.41.*",
     "datasets==2.16.*",
     "huggingface-hub==0.20.*",
     "openai==1.6.*",
@@ -40,7 +42,6 @@ dependencies = [
     "tqdm",
     "transformers<5",
     "typer[all]<1",
-
 ]
 
 [project.urls]
