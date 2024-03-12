@@ -5,7 +5,7 @@ from typing import Generator, Literal
 import torch
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response
-from transformers import Conversation, Pipeline, pipeline
+from transformers import Conversation, Pipeline, pipeline, AutoTokenizer
 
 
 @dataclass
@@ -45,10 +45,15 @@ class HFTextGenerator(TextGenerator):
         if self.use_flash_attention:
             model_kwargs["attn_implementation"] = "flash_attention_2"
 
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name,
+            trust_remote_code=self.trust_remote_code,
+        )
         try:
             self.pipe = pipeline(
                 "conversational",
                 model=self.model_name,
+                tokenizer=tokenizer,
                 model_kwargs=model_kwargs,
                 trust_remote_code=self.trust_remote_code,
                 device_map=self.device_map,
@@ -61,6 +66,7 @@ class HFTextGenerator(TextGenerator):
                 self.pipe = pipeline(
                     "conversational",
                     model=self.model_name,
+                    tokenizer=tokenizer,
                     model_kwargs=model_kwargs,
                     trust_remote_code=self.trust_remote_code,
                     device_map=self.device_map,
