@@ -99,7 +99,9 @@ def answer(
     load_in_4bit: Annotated[
         bool, Option(help="(hf) whether to load the model in 4bit precision to save memory")
     ] = False,
-    use_flash_attention: Annotated[bool, Option(help="(hf) whether to use flash attention 2")] = False,
+    use_flash_attention: Annotated[
+        bool, Option(help="(hf) whether to use flash attention via torch's enable_flash_sdp")
+    ] = False,
     trust_remote_code: Annotated[
         bool, Option(help="(hf) whether to trust remote code - this may be required to run some newer models")
     ] = False,

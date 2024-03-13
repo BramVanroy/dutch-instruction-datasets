@@ -49,6 +49,16 @@ class HFTextGenerator(TextGenerator):
             except AttributeError:
                 raise ValueError(f"Invalid torch dtype: {self.torch_dtype}")
 
+        if self.use_flash_attention:
+            try:
+                torch.backends.cuda.enable_flash_sdp(True)
+            except Exception as exc:
+                logging.error(
+                    "Could not enable flash attention with torch.backends.cuda.enable_flash_sdp."
+                    f" Disabling...\nError message: {exc}"
+                )
+                pass
+
         bnb_config = BitsAndBytesConfig(load_in_8bit=self.load_in_8bit, load_in_4bit=self.load_in_4bit)
         model_kwargs = {
             "quantization_config": bnb_config,
@@ -58,36 +68,24 @@ class HFTextGenerator(TextGenerator):
             "device_map": self.device_map,
         }
 
-        if self.use_flash_attention:
-            model_kwargs["attn_implementation"] = "flash_attention_2"
+        model = AutoModelForCausalLM.from_pretrained(self.model_name, **model_kwargs)
+        try:
+            model = torch.compile(model)
+            logging.error("Successfully compiled model with torch.compile")
+        except RuntimeError:
+            pass
 
-        model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            **model_kwargs
-        )
         model.eval()
 
         tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             trust_remote_code=self.trust_remote_code,
         )
-        try:
-            self.pipe = pipeline(
-                "conversational",
-                model=model,
-                tokenizer=tokenizer,
-            )
-        except TypeError as exc:
-            if self.use_flash_attention:
-                logging.error("Flash attention not supported by model. Retrying without flash attention...")
-                model_kwargs.pop("attn_implementation", None)
-                self.pipe = pipeline(
-                    "conversational",
-                    model=self.model_name,
-                    tokenizer=tokenizer,
-                )
-            else:
-                raise exc
+        self.pipe = pipeline(
+            "conversational",
+            model=model,
+            tokenizer=tokenizer,
+        )
 
         if self.chat_template is not None:
             self.pipe.tokenizer.chat_template = self.chat_template
