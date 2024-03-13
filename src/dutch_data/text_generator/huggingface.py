@@ -8,14 +8,6 @@ from dutch_data.utils import Response
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, Conversation, Pipeline, pipeline
 
 
-if (
-    torch.cuda.is_available()
-    and not torch.backends.cuda.matmul.allow_tf32
-    and torch.cuda.get_device_capability() >= (8, 0)
-):
-    torch.set_float32_matmul_precision("high")
-
-
 @dataclass
 class HFTextGenerator(TextGenerator):
     """
@@ -86,10 +78,6 @@ class HFTextGenerator(TextGenerator):
             self.model_name,
             trust_remote_code=self.trust_remote_code,
         )
-
-        if tokenizer.pad_token_id is None:
-            tokenizer.pad_token_id = tokenizer.eos_token_id
-
         self.pipe = pipeline(
             "conversational",
             model=model,
@@ -190,6 +178,7 @@ class HFTextGenerator(TextGenerator):
                     top_k=top_k,
                     top_p=top_p,
                     batch_size=batch_size,
+                    pad_token_id=self.pipe.tokenizer.eos_token_id if self.pipe.tokenizer.pad_token_id is None else None,
                     **other_gen_kwargs,
                 ),
             )

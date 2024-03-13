@@ -15,13 +15,6 @@ try:
 except ModuleNotFoundError:
     VLLM_AVAILABLE = False
 
-if (
-    torch.cuda.is_available()
-    and not torch.backends.cuda.matmul.allow_tf32
-    and torch.cuda.get_device_capability() >= (8, 0)
-):
-    torch.set_float32_matmul_precision("high")
-
 
 @dataclass
 class VLLMTextGenerator(TextGenerator):
