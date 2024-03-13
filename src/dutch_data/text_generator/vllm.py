@@ -38,12 +38,20 @@ class VLLMTextGenerator(TextGenerator):
                 "VLLM is not available. Please install VLLM from https://github.com/vllm-project/vllm/."
                 " Note that Windows might not be supported."
             )
+        
+        if "-awq" in self.model_name.lower() or "_awq" in self.model_name.lower():
+            quantization = "awq"
+        elif "-gptq" in self.model_name.lower() or "_gptq" in self.model_name.lower():
+            quantization = "gptq"
+        else:
+            quantization = None
 
         self.llm = VllmLLM(
             model=self.model_name,
             trust_remote_code=self.trust_remote_code,
             tensor_parallel_size=self.tensor_parallel_size,
             dtype=self.dtype,
+            quantization=quantization,
         )
 
     def query_messages(
