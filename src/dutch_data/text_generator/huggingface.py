@@ -54,7 +54,6 @@ class HFTextGenerator(TextGenerator):
         bnb_config = BitsAndBytesConfig(
             load_in_8bit=self.load_in_8bit,
             load_in_4bit=self.load_in_4bit,
-            bnb_4bit_use_double_quant=True,
             bnb_4bit_compute_dtype=self.torch_dtype,
         )
         model_kwargs = {
