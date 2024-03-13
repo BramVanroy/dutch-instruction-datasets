@@ -44,27 +44,29 @@ class HFTextGenerator(TextGenerator):
 
     def __post_init__(self):
         if self.torch_dtype is not None and self.torch_dtype != "auto":
-            self.torch_dtype = getattr(torch, self.torch_dtype)
+            try:
+                self.torch_dtype = getattr(torch, self.torch_dtype)
+            except AttributeError:
+                raise ValueError(f"Invalid torch dtype: {self.torch_dtype}")
 
-        config = AutoConfig.from_pretrained(
-            self.model_name,
-            trust_remote_code=self.trust_remote_code,
-        )
         bnb_config = BitsAndBytesConfig(load_in_8bit=self.load_in_8bit, load_in_4bit=self.load_in_4bit)
         model_kwargs = {
             "quantization_config": bnb_config,
             "trust_remote_code": self.trust_remote_code,
+            "torch_dtype": self.torch_dtype,
+            "low_cpu_mem_usage": True,
+            "device_map": self.device_map,
         }
 
         if self.use_flash_attention:
             model_kwargs["attn_implementation"] = "flash_attention_2"
 
-        with init_empty_weights():
-            model = AutoModelForCausalLM.from_config(config, **model_kwargs)
-
-        model = load_checkpoint_and_dispatch(model, self.model_name, device_map=self.device_map)
+        model = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            **model_kwargs
+        )
         model.eval()
-        
+
         tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             trust_remote_code=self.trust_remote_code,
@@ -74,10 +76,6 @@ class HFTextGenerator(TextGenerator):
                 "conversational",
                 model=model,
                 tokenizer=tokenizer,
-                model_kwargs=model_kwargs,
-                trust_remote_code=self.trust_remote_code,
-                device_map=self.device_map,
-                torch_dtype=self.torch_dtype,
             )
         except TypeError as exc:
             if self.use_flash_attention:
@@ -87,10 +85,6 @@ class HFTextGenerator(TextGenerator):
                     "conversational",
                     model=self.model_name,
                     tokenizer=tokenizer,
-                    model_kwargs=model_kwargs,
-                    trust_remote_code=self.trust_remote_code,
-                    device_map=self.device_map,
-                    torch_dtype=self.torch_dtype,
                 )
             else:
                 raise exc
