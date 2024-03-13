@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Generator
 
+import torch
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response, batchify
 
@@ -13,6 +14,13 @@ try:
     VLLM_AVAILABLE = True
 except ModuleNotFoundError:
     VLLM_AVAILABLE = False
+
+if (
+    torch.cuda.is_available()
+    and not torch.backends.cuda.matmul.allow_tf32
+    and torch.cuda.get_device_capability() >= (8, 0)
+):
+    torch.set_float32_matmul_precision("high")
 
 
 @dataclass
@@ -38,7 +46,7 @@ class VLLMTextGenerator(TextGenerator):
                 "VLLM is not available. Please install VLLM from https://github.com/vllm-project/vllm/."
                 " Note that Windows might not be supported."
             )
-        
+
         if "-awq" in self.model_name.lower() or "_awq" in self.model_name.lower():
             quantization = "awq"
         elif "-gptq" in self.model_name.lower() or "_gptq" in self.model_name.lower():

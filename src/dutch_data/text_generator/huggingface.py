@@ -3,18 +3,17 @@ from dataclasses import dataclass, field
 from typing import Generator, Literal
 
 import torch
-from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    Conversation,
-    Pipeline,
-    pipeline,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, Conversation, Pipeline, pipeline
+
+
+if (
+    torch.cuda.is_available()
+    and not torch.backends.cuda.matmul.allow_tf32
+    and torch.cuda.get_device_capability() >= (8, 0)
+):
+    torch.set_float32_matmul_precision("high")
 
 
 @dataclass
@@ -52,6 +51,7 @@ class HFTextGenerator(TextGenerator):
         if self.use_flash_attention:
             try:
                 torch.backends.cuda.enable_flash_sdp(True)
+                logging.error("Successfully enabled torch's enable_flash_sdp")
             except Exception as exc:
                 logging.error(
                     "Could not enable flash attention with torch.backends.cuda.enable_flash_sdp."
@@ -59,7 +59,12 @@ class HFTextGenerator(TextGenerator):
                 )
                 pass
 
-        bnb_config = BitsAndBytesConfig(load_in_8bit=self.load_in_8bit, load_in_4bit=self.load_in_4bit)
+        bnb_config = BitsAndBytesConfig(
+            load_in_8bit=self.load_in_8bit,
+            load_in_4bit=self.load_in_4bit,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=self.torch_dtype,
+        )
         model_kwargs = {
             "quantization_config": bnb_config,
             "trust_remote_code": self.trust_remote_code,
@@ -81,6 +86,10 @@ class HFTextGenerator(TextGenerator):
             self.model_name,
             trust_remote_code=self.trust_remote_code,
         )
+
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+
         self.pipe = pipeline(
             "conversational",
             model=model,
