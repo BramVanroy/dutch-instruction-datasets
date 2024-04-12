@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -55,51 +56,85 @@ class AnswerGenerator(DatasetGenerator):
 
         pf_tmp, done_samples, pf_tmp_failed, failed_samples = self._load_done_failed()
 
-        with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
-            for split_name, split_dataset in orig_dataset.items():
-                if self.max_samples is not None:
-                    split_dataset = split_dataset.select(range(self.max_samples))
+        do_retry = True
+        num_retries = self.num_dataset_retries
+        while do_retry:
+            with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open(
+                "a", encoding="utf-8"
+            ) as fhout_failed:
+                for split_name, split_dataset in orig_dataset.items():
+                    if self.max_samples is not None:
+                        split_dataset = split_dataset.select(range(self.max_samples))
 
-                # Get the IDs of the examples that have already been translated or failed
-                done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
-                    done_samples, failed_samples, split_name
-                )
-
-                print(
-                    f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}"
-                    f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name}"
-                )
-
-                messages = self._prepare_messages(split_dataset, done_subset_idxs)
-
-                if not messages:
-                    continue
-
-                print(f"Number of messages to answer: {len(messages)}")
-
-                for answer_response in (
-                    pbar := tqdm(
-                        self.text_generator.batch_query_messages(messages, **kwargs),
-                        total=len(messages),
+                    # Get the IDs of the examples that have already been translated or failed
+                    done_subset_idxs, num_done, failed_subset_idxs, num_failed = self._get_done_failed_subset_idxs(
+                        done_samples, failed_samples, split_name
                     )
-                ):
-                    result_row = {
-                        "split": split_name,
-                        "column": self.response_column,
-                        "idx": answer_response.job_idx,
-                    }
 
-                    if answer_response.error is None and answer_response.text_response is not None:
-                        result_row[self.response_column] = answer_response.text_response.strip()
-                        done_samples.append(result_row)
-                        self._write_row_to_fh(fhout, result_row)
-                        num_done += 1
+                    print(
+                        f"Skipping {len(done_subset_idxs)} already answered examples in {split_name}"
+                        f"\nSkipping {len(failed_subset_idxs)} failed examples in {split_name}"
+                    )
+
+                    messages = self._prepare_messages(split_dataset, done_subset_idxs)
+
+                    if not messages:
+                        continue
+
+                    print(f"Number of messages to answer: {len(messages)}")
+
+                    for answer_response in (
+                        pbar := tqdm(
+                            self.text_generator.batch_query_messages(messages, **kwargs),
+                            total=len(messages),
+                        )
+                    ):
+                        result_row = {
+                            "split": split_name,
+                            "column": self.response_column,
+                            "idx": answer_response.job_idx,
+                        }
+
+                        if answer_response.error is None and answer_response.text_response is not None:
+                            result_row[self.response_column] = answer_response.text_response.strip()
+                            done_samples.append(result_row)
+                            self._write_row_to_fh(fhout, result_row)
+                            num_done += 1
+                        else:
+                            result_row["error"] = str(answer_response.error)
+                            self._write_row_to_fh(fhout_failed, result_row)
+                            num_failed += 1
+
+                        pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
+
+            if not pf_tmp_failed.exists() or pf_tmp_failed.stat().st_size == 0:
+                logging.info("No errors! Stopping")
+                do_retry = False
+            else:
+                error_lines = pf_tmp_failed.read_text(encoding="utf-8").splitlines()
+                num_all_error_lines = len(error_lines)
+                error_lines = [
+                    l
+                    for l in error_lines
+                    if not any(
+                        err in l.lower()
+                        for err in ["timeout", "timed out", "time out", "empty conversation", "error code: 429"]
+                    )
+                ]
+
+                if len(error_lines) == num_all_error_lines:
+                    logging.info("No 429, empty conversations, or timeout errors! Stopping")
+                    do_retry = False
+                else:
+                    if len(error_lines) == 0:
+                        pf_tmp_failed.unlink()
                     else:
-                        result_row["error"] = str(answer_response.error)
-                        self._write_row_to_fh(fhout_failed, result_row)
-                        num_failed += 1
+                        pf_tmp_failed.write_text("\n".join(error_lines) + "\n")
 
-                    pbar.set_description(f"{split_name} ({num_done:,} ✓ | {num_failed:,} ✗)")
+            num_retries -= 1
+            if num_retries == 0:
+                logging.error("Too many retries, stopping")
+                do_retry = False
 
         self._failed_items_check(pf_tmp_failed)
         if done_samples:

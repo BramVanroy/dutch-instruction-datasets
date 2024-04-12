@@ -177,7 +177,9 @@ class HFTextGenerator(TextGenerator):
                     top_k=top_k,
                     top_p=top_p,
                     batch_size=batch_size,
-                    pad_token_id=self.pipe.tokenizer.eos_token_id if self.pipe.tokenizer.pad_token_id is None else None,
+                    pad_token_id=self.pipe.tokenizer.eos_token_id
+                    if self.pipe.tokenizer.pad_token_id is None
+                    else None,
                     **other_gen_kwargs,
                 ),
             )

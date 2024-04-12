@@ -177,6 +177,6 @@ def answer(
     )
 
     if hf_model_name:
-        return answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
+        processed_dataset = answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
     else:
-        return answerer.process_dataset(max_tokens=max_tokens)
+        processed_dataset = answerer.process_dataset(max_tokens=max_tokens)
