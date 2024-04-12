@@ -2,8 +2,9 @@ import re
 import sys
 import unicodedata as ud
 
-from datasets import DatasetDict, load_dataset
-from huggingface_hub import HfApi
+import fasttext
+from datasets import Dataset, DatasetDict, load_dataset
+from huggingface_hub import HfApi, hf_hub_download
 from huggingface_hub.utils import RepositoryNotFoundError
 from InquirerPy import inquirer
 
@@ -21,6 +22,29 @@ def is_latin(unicode_chr: str):
 
 def only_roman_chars(unicode_text: str):
     return all(is_latin(uchr) for uchr in unicode_text if uchr.isalpha())
+
+
+model_path = hf_hub_download(repo_id="facebook/fasttext-language-identification", filename="model.bin")
+model = fasttext.load_model(model_path)
+
+
+def identify_language(row, column_name: str):
+    text = row[column_name]
+
+    # When this is a conversation column with lists of dictionaries of the type {"content": ..., "role"}
+    # we just glue everything together
+    if isinstance(text, list):
+        text = " ".join(msg["content"] for msg in text)
+
+    text = text.replace("\n", " ")
+    text = " ".join(text.split())
+    if text is None:
+        return None
+
+    label, prob = model.predict(text, k=1)
+    label = label[0]
+
+    return label.replace("__label__", "")
 
 
 def filter_dataset(row, column_names: list[str]):
@@ -108,7 +132,12 @@ def filter_dataset(row, column_names: list[str]):
         if not only_roman_chars(text):
             return False
 
-        if row[f"{column_name}_lid"] != "nld_Latn":
+        if f"{column_name}_lid" not in row:
+            lid = identify_language(row, column_name)
+        else:
+            lid = row[f"{column_name}_lid"]
+
+        if lid != "nld_Latn":
             num_tokens = len(text.split())
             # If the language is not the required one, but the text is only short, it might just be "Ja." or "Nee."
             # or something that was tough to identify
@@ -118,47 +147,80 @@ def filter_dataset(row, column_names: list[str]):
     return True
 
 
+def conv_to_content(sample, _col: str):
+    conv = sample[_col]
+    text = ""
+    for turn in conv:
+        if turn["role"] == "assistant":
+            text += turn["content"] + " "
+
+    return {f"{_col}_content": text.strip()}
+
+
+def remove_duplicates(dataset, column_names: list[str]):
+    original_size = dataset.shape[0]
+
+    col_map = {}
+    for col in column_names:
+        if not isinstance(dataset[col][0], str):
+            dataset = dataset.map(conv_to_content, fn_kwargs={"_col": col}, num_proc=64)
+            col_map[col] = f"{col}_content"
+        else:
+            col_map[col] = col
+
+    df = dataset.to_pandas()
+    for col in column_names:
+        df = df.drop_duplicates(subset=[col_map[col]]).reset_index(drop=True)
+    df = df.drop(columns=[col_map[col] for col in column_names if col_map[col] != col])
+    dataset = Dataset.from_pandas(df)
+
+    dedupe_size = dataset.shape[0]
+    print(f"Removed {original_size - dedupe_size} duplicates. New size: {dedupe_size}")
+
+    return dataset
+
+
 def main():
     api = HfApi()
 
-    while True:
-        ds_name = inquirer.text(
-            message="Dataset repo name:",
-        ).execute()
-
-        try:
-            refs = api.list_repo_refs(ds_name, repo_type="dataset")
-        except RepositoryNotFoundError:
-            print(
-                "Dataset not found. Try again and make sure that you are logged in with `huggingface-cli login`"
-                " when accessing a private dataset.",
-                file=sys.stderr,
-            )
-        else:
-            break
-
-    ds_branches = [ref.name for ref in refs.branches]
-
-    branch_name = inquirer.select(
-        message="Select branch:",
-        choices=ds_branches,
+    ds_name = inquirer.text(
+        message="Dataset repo name:",
+    ).execute()
+    ds_config_name = inquirer.text(
+        message="Dataset config name:",
+        default="default",
+    ).execute()
+    ds_branch_name = inquirer.text(
+        message="Dataset branch name:",
+        default="main",
     ).execute()
 
-    ds = load_dataset(ds_name, revision=branch_name)
+    ds = load_dataset(ds_name, ds_config_name, revision=ds_branch_name)
 
     output_dataset = {}
     for split_name, split_ds in ds.items():
-        print(f"Branch: {branch_name}, split: {split_name}, dataset size: {split_ds.shape}")
+        print(
+            f"Config: {ds_config_name}, Branch: {ds_branch_name}, split: {split_name}, dataset size: {split_ds.shape}"
+        )
+
+        dedupe_cols = inquirer.select(
+            message="Select columns to deduplicate on:",
+            choices=split_ds.column_names,
+            multiselect=True,
+            transformer=lambda result: f"{len(result)} column{'s' if len(result) > 1 else ''} selected ({', '.join(result)})",
+        ).execute()
+        split_ds = remove_duplicates(split_ds, dedupe_cols)
 
         lid_cols = inquirer.select(
-            message="Select columns whose text to language identify:",
+            message="Select columns whose text to filter:",
             choices=split_ds.column_names,
             multiselect=True,
             transformer=lambda result: f"{len(result)} column{'s' if len(result) > 1 else ''} selected ({', '.join(result)})",
         ).execute()
 
-        output_dataset[split_name] = split_ds.filter(lambda row: filter_dataset(row, lid_cols), keep_in_memory=True)
-        print("After filtering:", output_dataset[split_name].shape)
+        split_ds = split_ds.filter(lambda row: filter_dataset(row, lid_cols), keep_in_memory=True)
+        output_dataset[split_name] = split_ds
+        print("After filtering/deduplicating:", output_dataset[split_name].shape)
 
     output_dataset = DatasetDict(output_dataset)
 
@@ -183,10 +245,15 @@ def main():
         if not repo_id:
             break
 
+        config_name = inquirer.text(
+            message=f"Config name to upload to in {repo_id}:",
+            default="default",
+        ).execute()
+
         revision_id = inquirer.text(message=f"Branch ID to upload to in {repo_id}:", default="main").execute()
 
         try:
-            output_dataset.push_to_hub(repo_id, revision=revision_id)
+            output_dataset.push_to_hub(repo_id, config_name, revision=revision_id)
         except Exception as exc:
             print(
                 f"Could not upload the dataset ({str(exc)}). Make sure that the dataset and revsion are valid.",
