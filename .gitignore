@@ -1,3 +1,6 @@
+*.png
+*.xlsx
+benchmark_output
 .moeilijk_sysprompt1
 .vacature_templ
 scoring
