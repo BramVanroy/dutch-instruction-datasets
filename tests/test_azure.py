@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from dutch_data.azure_utils.credentials import Credentials
+from dutch_data.api_utils.credentials import AzureCredentials
 from dutch_data.text_generator import AzureTextGenerator
 
 
@@ -12,28 +12,28 @@ class TestAzureCredentials:
 
     def test_from_file_no_profile(self):
         # Will use the first profile
-        creds = Credentials.from_json(self.credentials_file)
-        assert isinstance(creds, Credentials)
+        creds = AzureCredentials.from_json(self.credentials_file)
+        assert isinstance(creds, AzureCredentials)
         assert creds.azure_deployment == "DeployedDummy1"
 
     def test_from_file(self):
         # Assumes that the credentials file has a profile called "gpt-42-dummy"
-        Credentials.from_json(self.credentials_file, "gpt-42-dummy")
+        AzureCredentials.from_json(self.credentials_file, "gpt-42-dummy")
 
     def test_invalid_profile(self):
         with pytest.raises(KeyError):
-            Credentials.from_json(self.credentials_file, "thIsKeyDoesNotExist")
+            AzureCredentials.from_json(self.credentials_file, "thIsKeyDoesNotExist")
 
     def test_invalid_credentials_file(self):
         with pytest.raises(FileNotFoundError):
-            Credentials.from_json("ThisFileDoesNotExist.json")
+            AzureCredentials.from_json("ThisFileDoesNotExist.json")
 
 
 class TestAzureGenerator:
     def setup_method(self):
         # Assumes that the credentials file is in the root directory of the project
         self.credentials_file = Path(__file__).parent / "dummy-credentials.json"
-        self.credentials = Credentials.from_json(self.credentials_file)
+        self.credentials = AzureCredentials.from_json(self.credentials_file)
 
     def test_multi_from_json(self):
         azure_generator = AzureTextGenerator.from_json(self.credentials_file)

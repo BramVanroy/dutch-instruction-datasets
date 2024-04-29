@@ -180,6 +180,8 @@ def answer(
     )
 
     if hf_model_name:
-        return answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size, only_save_current=only_save_current)
+        return answerer.process_dataset(
+            max_new_tokens=max_tokens, batch_size=batch_size, only_save_current=only_save_current
+        )
     else:
         return answerer.process_dataset(max_tokens=max_tokens, only_save_current=only_save_current)

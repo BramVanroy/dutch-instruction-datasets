@@ -56,7 +56,9 @@ class AnswerGenerator(DatasetGenerator):
         pf_tmp, done_samples, pf_tmp_failed, failed_samples = self._load_done_failed()
 
         if not only_save_current:
-            with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open("a", encoding="utf-8") as fhout_failed:
+            with pf_tmp.open("a", encoding="utf-8") as fhout, pf_tmp_failed.open(
+                "a", encoding="utf-8"
+            ) as fhout_failed:
                 for split_name, split_dataset in orig_dataset.items():
                     if self.max_samples is not None:
                         split_dataset = split_dataset.select(range(self.max_samples))

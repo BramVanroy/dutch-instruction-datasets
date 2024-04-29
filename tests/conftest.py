@@ -6,7 +6,7 @@ import openai
 import pytest
 import torch
 import transformers
-from dutch_data.azure_utils.credentials import Credentials
+from dutch_data.api_utils.credentials import AzureCredentials
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
 from dutch_data.text_generator.vllm import VLLM_AVAILABLE
 from openai.types.chat.chat_completion import ChatCompletion, Choice
@@ -80,7 +80,7 @@ def azure_generator():
     credentials_file = Path(__file__).parent / "dummy-credentials.json"
 
     # If no profile is used in Credentials, only the first one in the file will be used.
-    credentials = Credentials.from_json(credentials_file)
+    credentials = AzureCredentials.from_json(credentials_file)
     if "azure" not in TEXT_GENERATORS:
         TEXT_GENERATORS["azure"] = AzureTextGenerator.from_credentials(credentials, timeout=1, max_retries=1)
 

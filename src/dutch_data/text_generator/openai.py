@@ -1,56 +1,61 @@
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from itertools import cycle
 from os import PathLike
 from pathlib import Path
 from typing import Generator, Iterator
 
-from dutch_data.api_utils.credentials import AzureCredentials
-from dutch_data.api_utils.utils import AzureOpenAIDeployment, ContentFilterException, add_job_idx_to_messages
+from dutch_data.api_utils.credentials import OpenAiCredentials
+from dutch_data.api_utils.utils import ContentFilterException, add_job_idx_to_messages
 from dutch_data.text_generator.base import TextGenerator
 from dutch_data.utils import Response
 from openai import BadRequestError
+from openai import OpenAI as OpenAiClient
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_random_exponential
 from tenacity.retry import retry_if_not_exception_type
 
 
 @dataclass
-class AzureTextGenerator(TextGenerator):
+class OpenAiTextGenerator(TextGenerator):
     """
-    Text generator for the Azure API.
+    Text generator for the OpenAI API.
     """
 
-    clients: AzureOpenAIDeployment | list[AzureOpenAIDeployment]
+    clients: OpenAiClient | list[OpenAiClient]
+    models: str | list[str]
     max_workers: int = 6
     verbose: bool = False
-    cyclical_clients: Iterator[AzureOpenAIDeployment] | None = field(init=False)
+    cyclical_clients: Iterator[OpenAiClient] | None = field(init=False)
+    cyclical_models: Iterator[str] | None = field(init=False)
 
     def __post_init__(self):
-        if isinstance(self.clients, AzureOpenAIDeployment):
+        if isinstance(self.clients, OpenAiClient):
             self.clients = [self.clients]
+        if isinstance(self.models, str):
+            self.models = [self.models]
         self.cyclical_clients = cycle(self.clients)
+        self.cyclical_models = cycle(self.models)
 
     @property
-    def active_client(self) -> AzureOpenAIDeployment:
+    def active_client(self) -> OpenAiClient:
         return next(self.cyclical_clients)
+
+    @property
+    def active_model(self) -> str:
+        return next(self.cyclical_models)
 
     def __hash__(self):
         return hash(
-            tuple(
-                [
-                    (client.api_key, client.api_version, client.azure_deployment, client.azure_endpoint)
-                    for client in self.clients
-                ]
-            )
+            tuple([(client.api_key, client.organization, model) for model, client in zip(self.models, self.clients)])
         )
 
     def _query_api(
         self, messages: tuple[int, tuple[tuple[tuple[str, str], ...], ...]], *args, json_mode: bool = False, **kwargs
     ) -> Response:
         """
-        Query the Azure OpenAI API. This is mostly intended for internal use (because it requires having an index and
+        Query the OpenAI API. This is mostly intended for internal use (because it requires having an index and
         converting the messages into the required format), but can be used externally as well.
         :param messages: tuple of messages where the first item is the index of the job, and the
         second item is a tuple of tuples of key/value pairs, to be transformed back into a dict, e.g. ("role", "user")
@@ -70,6 +75,9 @@ class AzureTextGenerator(TextGenerator):
         # Get the active client (changes on every call to 'self.active_client') so we assign it to a variable to avoid
         # it changing during the execution of this function.
         client = self.active_client
+        model = self.active_model
+        print(client)
+        print(model)
         # Transform messages back into required format.
         job_idx = messages[0]
         messages = [dict(message) for message in messages[1]]
@@ -92,7 +100,7 @@ class AzureTextGenerator(TextGenerator):
             ):
                 with attempt:
                     completion = client.chat.completions.create(
-                        model=client.azure_deployment,
+                        model=model,
                         messages=messages,
                         response_format={"type": "json_object" if json_mode else "text"},
                         **kwargs,
@@ -146,7 +154,7 @@ class AzureTextGenerator(TextGenerator):
         **kwargs,
     ) -> Response:
         """
-        Query the Azure OpenAI API with a single conversation (list of turns (typically dictionaries)).
+        Query the OpenAI API with a single conversation (list of turns (typically dictionaries)).
         :param messages: messages to query the model with. A list of dicts where each dict must have a "role" and
         "content" keys
         :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
@@ -168,7 +176,7 @@ class AzureTextGenerator(TextGenerator):
         **kwargs,
     ) -> Generator[Response, None, None]:
         """
-        Query the Azure OpenAI API with a list of messages.
+        Query the OpenAI API with a list of messages.
         :param list_of_messages: list of lists of messages to send to the API. We will add job idxs automatically
         but for more control you can also pass a list of tuples of (job_idx, messages) to specify the job idxs yourself
         :param args: any extra arguments to send, e.g. job hash identifiers, which will be include in the Response's
@@ -209,7 +217,7 @@ class AzureTextGenerator(TextGenerator):
     @classmethod
     def from_credentials(
         cls,
-        credentials: AzureCredentials,
+        credentials: OpenAiCredentials,
         max_retries: int = 3,
         timeout: float = 30.0,
         max_workers: int = 6,
@@ -224,12 +232,13 @@ class AzureTextGenerator(TextGenerator):
         :param verbose: whether to print more information of the API responses
         :return: Initialized AzureQuerier object
         """
-        client = AzureOpenAIDeployment(
-            **asdict(credentials),
+        api_key = credentials.api_key
+        client = OpenAiClient(
+            api_key=api_key,
             max_retries=max_retries,
             timeout=timeout,
         )
-        return cls(client, max_workers=max_workers, verbose=verbose)
+        return cls(client, models=credentials.model, max_workers=max_workers, verbose=verbose)
 
     @classmethod
     def from_json(
@@ -269,12 +278,13 @@ class AzureTextGenerator(TextGenerator):
             )
 
         clients = [
-            AzureOpenAIDeployment(
-                **credentials[profile],
+            OpenAiClient(
+                api_key=credentials[profile]["api_key"],
                 max_retries=max_retries,
                 timeout=timeout,
             )
             for profile in credentials_profiles
         ]
+        models = [credentials[profile]["model"] for profile in credentials_profiles]
 
-        return cls(clients, max_workers=max_workers, verbose=verbose)
+        return cls(clients, models=models, max_workers=max_workers, verbose=verbose)

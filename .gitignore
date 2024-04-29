@@ -1,6 +1,8 @@
 .conversation_personas_nl.json
 .conversation_templ_nl.txt
 .wiki_simpl_sysprompt
+*credentials.json
+.int_credentials.json
 
 run-backend.ps
 .eslintrc.js

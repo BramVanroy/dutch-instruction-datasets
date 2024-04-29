@@ -8,8 +8,6 @@ from huggingface_hub.utils import RepositoryNotFoundError
 from InquirerPy import inquirer
 
 
-
-
 # Taken from https://stackoverflow.com/a/3308844/1150683
 def is_latin(unicode_chr: str):
     try:
