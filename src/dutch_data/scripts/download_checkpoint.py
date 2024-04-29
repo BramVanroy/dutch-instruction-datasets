@@ -17,7 +17,7 @@ ignore_patterns = [
     "*.pt",
     "*.bin",
     "*.py",
-    "*trainer_state.json"
+    "*trainer_state.json",
 ]
 pdout = Path(output_path).resolve()
 must_retry = not pdout.exists() or len(list(pdout.iterdir())) == 0
@@ -27,7 +27,7 @@ while must_retry:
         local_dir=output_path,
         local_dir_use_symlinks=False,
         allow_patterns=allow_patterns,
-        ignore_patterns=ignore_patterns
+        ignore_patterns=ignore_patterns,
     )
 
     must_retry = not pdout.exists() or len(list(pdout.iterdir())) == 0

@@ -2,13 +2,14 @@ import argparse
 from itertools import chain
 
 from datasets import load_dataset
+from dutch_data.scripts.alignment_handbook_data import apply_chat_template, get_datasets
 from transformers import AutoTokenizer
-
-from dutch_data.scripts.alignment_handbook_data import get_datasets, apply_chat_template
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Preprocess data (apply chat template, tokenize and group) and save to disk")
+    parser = argparse.ArgumentParser(
+        description="Preprocess data (apply chat template, tokenize and group) and save to disk"
+    )
     parser.add_argument(
         "--task_name",
         choices=["sft", "dpo"],
@@ -75,7 +76,7 @@ def main():
         data_args,
         splits=data_args.dataset_splits,
         configs=data_args.dataset_configs,
-        columns_to_keep=["messages", "chosen", "rejected", "prompt", "completion", "label"]
+        columns_to_keep=["messages", "chosen", "rejected", "prompt", "completion", "label"],
     )
 
     datasets["train"] = datasets["train"].shuffle(seed=42, keep_in_memory=True)
