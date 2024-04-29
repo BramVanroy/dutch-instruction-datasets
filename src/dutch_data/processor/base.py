@@ -208,7 +208,7 @@ class DatasetProcessor(ABC):
                     error_counter["rate_limit"] += 1
                 elif "empty conversation" in error:
                     error_counter["empty"] += 1
-                elif "timed out" in error:
+                elif "timed out" in error or "time out" in error or "timeout" in error:
                     error_counter["time_out"] += 1
 
             num_errors = error_counter.total()
@@ -235,6 +235,7 @@ class DatasetGenerator(DatasetProcessor, ABC):
     """
 
     text_generator: TextGenerator | None = None
+    num_dataset_retries: int = 100
 
     def __post_init__(self):
         super().__post_init__()

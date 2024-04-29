@@ -1,3 +1,10 @@
+*.png
+*.xlsx
+benchmark_output
+.moeilijk_sysprompt1
+.vacature_templ
+scoring
+templates
 .conversation_personas_nl.json
 .conversation_templ_nl.txt
 .wiki_simpl_sysprompt
