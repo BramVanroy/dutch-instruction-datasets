@@ -76,8 +76,6 @@ class OpenAiTextGenerator(TextGenerator):
         # it changing during the execution of this function.
         client = self.active_client
         model = self.active_model
-        print(client)
-        print(model)
         # Transform messages back into required format.
         job_idx = messages[0]
         messages = [dict(message) for message in messages[1]]
