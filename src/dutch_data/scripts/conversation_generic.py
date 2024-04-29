@@ -123,13 +123,15 @@ def conversation(
         Option(help="hub branch to upload to. If not specified, will use the default branch, typically 'main'."),
     ] = None,
     max_workers: Annotated[
-        int, Option("--max-workers", "-j", help="(azure) how many parallel workers to use to query the API")
+        int, Option("--max-workers", "-j", help="(azure/openai) how many parallel workers to use to query the API")
     ] = 1,
-    max_retries: Annotated[int, Option(help="(azure) how many times to retry on errors")] = 3,
+    max_retries: Annotated[int, Option(help="(azure/openai) how many times to retry on errors")] = 3,
     max_tokens: Annotated[int, Option(help="max new tokens to generate")] = 2048,
-    timeout: Annotated[float, Option("--timeout", "-t", help="(azure) timeout in seconds for each API call")] = 30.0,
+    timeout: Annotated[
+        float, Option("--timeout", "-t", help="(azure/openai) timeout in seconds for each API call")
+    ] = 30.0,
     verbose: Annotated[
-        bool, Option("--verbose", "-v", help="(azure) whether to print more information of the API responses")
+        bool, Option("--verbose", "-v", help="(azure/openai) whether to print more information of the API responses")
     ] = False,
     device_map: Annotated[
         Optional[str],
