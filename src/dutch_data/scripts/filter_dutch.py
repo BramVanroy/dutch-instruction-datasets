@@ -8,7 +8,6 @@ from huggingface_hub.utils import RepositoryNotFoundError
 from InquirerPy import inquirer
 
 
-latin_letters = {}  # memo
 
 
 # Taken from https://stackoverflow.com/a/3308844/1150683

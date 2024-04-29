@@ -118,6 +118,9 @@ def answer(
             " set a smaller pseudo-batch size. In the VLLM case, I recommend to set this to a non-1 value."
         ),
     ] = 1,
+    only_save_current: Annotated[
+        bool, Option(help="whether to only save the current temporary completions to the final output file")
+    ] = False,
 ):
     """
     Answer a column of any dataset on the Hugging Face hub, optionally filtered by split and columns. Depending on the
@@ -177,6 +180,6 @@ def answer(
     )
 
     if hf_model_name:
-        return answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size)
+        return answerer.process_dataset(max_new_tokens=max_tokens, batch_size=batch_size, only_save_current=only_save_current)
     else:
-        return answerer.process_dataset(max_tokens=max_tokens)
+        return answerer.process_dataset(max_tokens=max_tokens, only_save_current=only_save_current)
