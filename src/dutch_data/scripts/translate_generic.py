@@ -1,9 +1,12 @@
+import json
+from pathlib import Path
 from typing import Annotated, Optional
 
 import torch
 import typer
 from dutch_data.processor.translate import TranslationGenerator
 from dutch_data.text_generator import AzureTextGenerator, HFTextGenerator, VLLMTextGenerator
+from dutch_data.text_generator.openai import OpenAiTextGenerator
 from typer import Argument, Option
 
 
@@ -148,14 +151,27 @@ def translate(
                 torch_dtype=torch_dtype,
             )
     else:
-        text_generator = AzureTextGenerator.from_json(
-            credentials_file,
-            credentials_profiles,
-            max_workers=max_workers,
-            timeout=timeout,
-            max_retries=max_retries,
-            verbose=verbose,
-        )
+        credentials_json = json.loads(Path(credentials_file).read_text(encoding="utf-8"))
+        is_azure = "azure_endpoint" in list(credentials_json.values())[0]
+
+        if is_azure:
+            text_generator = AzureTextGenerator.from_json(
+                credentials_file,
+                credentials_profiles,
+                max_workers=max_workers,
+                timeout=timeout,
+                max_retries=max_retries,
+                verbose=verbose,
+            )
+        else:
+            text_generator = OpenAiTextGenerator.from_json(
+                credentials_file,
+                credentials_profiles,
+                max_workers=max_workers,
+                timeout=timeout,
+                max_retries=max_retries,
+                verbose=verbose,
+            )
 
     translator = TranslationGenerator(
         text_generator=text_generator,
